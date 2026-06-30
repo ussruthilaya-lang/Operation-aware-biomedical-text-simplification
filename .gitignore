@@ -1,0 +1,7 @@
+
+data/plaba/*.json
+data/plaba/*.csv
+*.env
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
