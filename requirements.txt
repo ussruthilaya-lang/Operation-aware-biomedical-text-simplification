@@ -1,0 +1,28 @@
+# Core NLP
+spacy>=3.6.0
+scispacy>=0.5.3
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Biomedical models
+# en_ner_bc5cdr_md — install via:
+# pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.3/en_ner_bc5cdr_md-0.5.3.tar.gz
+
+# Evaluation
+easse>=0.2.0
+bert-score>=0.3.13
+sentence-transformers>=2.2.0
+
+# LLM integration
+openai>=1.0.0
+
+# Transformers (BioBERT, BERT-base, Lay-SciFive, BART)
+transformers>=4.35.0
+torch>=2.0.0
+
+# Utilities
+tqdm>=4.65.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+jupyter>=1.0.0
