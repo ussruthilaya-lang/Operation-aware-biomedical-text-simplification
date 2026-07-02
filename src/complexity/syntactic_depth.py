@@ -7,9 +7,10 @@
 # We use dependency parse tree depth — the longest path from 
 # root to any leaf node. Higher depth = more complex structure.
 
-import nltk
-nltk.download('punkt', quiet=True)
-nltk.download('averaged_perceptron_tagger', quiet=True)
+# import nltk
+# nltk.download('punkt', quiet=True)
+# nltk.download('averaged_perceptron_tagger', quiet=True)
+# nltk removed - using spacy primary path only
 
 try:
     import spacy
