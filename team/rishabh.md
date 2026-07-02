@@ -1,132 +1,106 @@
 # Rishabh — Task Brief
 
-**From Sruthilaya (Stage 1 complete):**
-
-The repo is live and Stage 1 is done. Here's what I built that directly 
-unblocks your work:
-
-**What's ready for you:**
-- `data/plaba/` — train.csv (635), val.csv (138), test.csv (148) + data.json
-- `src/complexity/` — all 5 detectors running, importable
-- `src/evaluation/warning_preservation.py` — safety metric ready
-- `results/complexity_prelim.csv` — per-sentence complexity flags, 
-   ready for your visualizations
-- `src/baselines/baseline1_no_simplification.py` — safety ceiling done
-- `src/baselines/baseline2_rule_based_chv.py` — CHV substitution done
-
-**Key finding from my EDA you need to know:**
-- 33.1% of sentences contain warning cues — this is our headline safety number
-- 43.6% of sentences hit 3+ complexity types simultaneously
-- These numbers go in the Introduction and Data sections you're writing
+**Repo:** https://github.com/ussruthilaya-lang/Operation-aware-biomedical-text-simplification  
+**Your branch:** `feature/rishabh-data-pipeline`  
+**Deadline:** Thursday EOD
 
 ---
 
-## Your Deliverables for Prelim (by Thursday EOD)
+## What Sruthilaya Already Built (Stage 1 complete)
 
-### 1. PLABA Data Pipeline — `src/data/plaba_loader.py`
+- `data/plaba/` — train.csv (635), val.csv (138), test.csv (148) + data.json
+- `src/complexity/` — all 5 detectors, importable
+- `src/evaluation/warning_preservation.py` — safety metric
+- `src/baselines/baseline1_no_simplification.py` — safety ceiling (1.0)
+- `src/baselines/baseline2_rule_based_chv.py` — CHV substitution (0.994)
+- `results/complexity_prelim.csv` — per-sentence complexity flags
 
-Build a clean data loader the whole team imports. It should:
+**Key EDA numbers for your Introduction section:**
+- 87.9% sentences contain medical jargon
+- 82.7% are syntactically complex
+- 60.9% carry numerical risk data
+- 33.1% contain safety-critical warning language
+- 43.6% exhibit 3+ simultaneous complexity types
+
+---
+
+## PRELIM — Due Thursday EOD
+
+### 1. PLABA Data Loader — `src/data/plaba_loader.py`
 
 ```python
-load_train()  # returns DataFrame
-load_val()    # returns DataFrame  
-load_test()   # returns DataFrame
-load_all()    # returns combined DataFrame with split column
+def load_train()   # returns DataFrame
+def load_val()     # returns DataFrame
+def load_test()    # returns DataFrame
+def load_all()     # combined with split column
 ```
 
-Why this matters: right now everyone is writing 
-`pd.read_csv('data/plaba/train.csv')` independently. 
-One central loader means one place to fix encoding issues, 
-one place to add preprocessing, one place to add the sample data path.
-This is production-grade data engineering thinking.
+Why: everyone currently writes `pd.read_csv('data/plaba/train.csv')` 
+independently. One central loader = one place to fix encoding issues, 
+one place to add preprocessing. Production-grade data engineering.
 
 ### 2. CHV Lookup Module — `src/data/chv_lookup.py`
 
-I have a starter CHV dictionary in `baseline2_rule_based_chv.py`.
-Extract it into a standalone importable module:
+Extract the CHV dictionary from `src/baselines/baseline2_rule_based_chv.py`
+into a standalone importable module:
 
 ```python
-def lookup(term)        # returns plain English equivalent or None
-def batch_lookup(terms) # returns dict of {term: equivalent}
-def get_all_terms()     # returns full CHV dictionary
+def lookup(term)         # returns plain English or None
+def batch_lookup(terms)  # returns {term: equivalent}
+def get_all_terms()      # returns full dictionary
 ```
 
-Why this matters: Sophakotra's operation routing needs CHV lookup 
-for Substitution operations. If it lives in baseline2 she can't 
-import it cleanly. Extract it, make it importable, add 50+ more 
-terms from the real CHV vocabulary.
-Real CHV: https://www.nlm.nih.gov/research/umls/sourcereleasedocs/current/CHV/
+Add 20-30 more terms from: https://www.nlm.nih.gov/research/umls/sourcereleasedocs/current/CHV/
+Sophakotra's operation router needs this — don't leave it buried in baseline2.
 
-### 3. BERTScore Evaluation — `src/evaluation/bertscore_eval.py`
+### 3. Visualizations — `notebooks/visualizations.ipynb`
 
-```python
-def compute_bertscore(source, hypothesis, reference)
-def compute_corpus_bertscore(pairs)  # list of (source, hyp, ref) tuples
-```
+Three plots minimum, saved to `results/figures/` as PNG:
+- Complexity signal bar chart (% sentences per detector)
+- Complexity co-occurrence counts (0/1/2/3/4 detectors firing)
+- Sentence length distribution (source vs target word count)
 
-Use `bert_score` library with BioBERT embeddings 
-(`dmis-lab/biobert-base-cased-v1.2`) — domain-matched similarity 
-matters here for the same reason our NER uses BC5CDR model.
+Load from `results/complexity_prelim.csv` — data is already there.
 
-### 4. Visualizations — `notebooks/visualizations.ipynb`
+### 4. Paper Sections — `paper/prelim_report.tex`
 
-Four plots for the paper (load from `results/complexity_prelim.csv`):
-- Complexity signal distribution bar chart (% sentences flagged per detector)
-- Complexity co-occurrence heatmap (which detectors fire together)
-- Sentence length distribution (source vs target)
-- Warning preservation comparison (baseline 1 vs baseline 2)
-
-Save all plots to `results/figures/` as PNG.
-
-### 5. Paper Sections — `paper/prelim_report.tex`
-
-Write Introduction and Data sections. Key points to hit:
-
-**Introduction:**
+**Introduction** (~0.5 page):
 - Health literacy gap — patients can't read biomedical text
-- Current simplification systems treat all complexity the same
+- Current systems treat all complexity the same
 - Our diagnostic approach: classify first, simplify second
-- Central research question (from proposal)
+- Central research question
 
-**Data section:**
-- PLABA dataset description (750 abstracts, 4 references/sentence)
+**Data section** (~0.3 page):
+- PLABA description (750 abstracts, 4 references/sentence)
 - Train/val/test split (635/138/148)
-- Our EDA findings — use my numbers from complexity_prelim.csv
-- Note: span-level operation labels derived via pseudo-labeling 
-  (edit distance heuristics) since TREC annotations are behind login wall
+- Use EDA numbers above
+- Note: span-level labels derived via pseudo-labeling
 
-### 6. Literature Review — 5-6 papers
+### 5. Literature Review — 5-6 papers
 
-Your angle: dataset construction, evaluation metrics, 
-prior PLABA shared task systems.
+Your angle: datasets, evaluation metrics, prior PLABA systems.
 
-Suggested papers:
-1. Attal et al. 2023 — PLABA (you write the dataset section anyway)
-2. Knappich et al. 2023 — BoschAI winner, motivates our approach
-3. Li et al. 2024 — BeeManc system, your Lay-SciFive baseline source
-4. Xu et al. 2016 — SARI metric (you're implementing BERTScore, 
-   know why SARI exists)
-5. Zhang et al. 2020 — BERTScore paper (you're implementing it)
-6. One more on biomedical text readability or health literacy
+Suggested:
+1. Attal et al. 2023 — PLABA dataset
+2. Knappich et al. 2023 — BoschAI PLABA winner
+3. Li et al. 2024 — BeeManc system
+4. Xu et al. 2016 — SARI metric
+5. Zhang et al. 2020 — BERTScore
+6. One on health literacy or readability
 
 ---
 
-## How Your Work Connects to the Full Paper
+## FULL PAPER — Not Thursday, Final Submission
 
-```
-Your data loader → everyone imports it → no broken paths
-Your CHV module → Sophakotra's operation router uses it
-Your BERTScore → Zihao's results table uses it
-Your visualizations → go directly into the paper figures
-Your Introduction → frames the entire paper narrative
-```
-
-You are the team's data infrastructure. If your loader breaks, 
-everyone's code breaks. Ship it first, ship it clean.
+- BERTScore evaluation module `src/evaluation/bertscore_eval.py`
+- Span reassembly for pipeline output
+- Additional visualizations: readability vs safety scatter plot,
+  per-operation safety preservation bar chart
+- Finalize Introduction and Data sections with full results
 
 ---
 
-## Repo Instructions
+## Repo Setup
 
 ```bash
 git clone https://github.com/ussruthilaya-lang/Operation-aware-biomedical-text-simplification.git
@@ -134,15 +108,13 @@ cd Operation-aware-biomedical-text-simplification
 conda create -n nlp-project python=3.10 -y
 conda activate nlp-project
 conda install -c conda-forge spacy pandas -y
-pip install scispacy bert-score
+pip install scispacy
 ```
 
-Data files go in `data/plaba/` — download from https://osf.io/rnpmf/
-(gitignored — don't commit the CSVs or data.json)
+Data: download from https://osf.io/rnpmf/ → put in `data/plaba/`
 
-Create your branch:
 ```bash
 git checkout -b feature/rishabh-data-pipeline
 ```
 
-Push your work and open a PR to main by Thursday EOD.
+PR to main by Thursday EOD.
