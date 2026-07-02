@@ -122,13 +122,31 @@ the safety anchor that all subsequent systems are measured against.
 
 ## My Lit Review Papers (6)
 
-To fill with PDFs when we write the lit review section:
-1. Attal et al. 2023 — PLABA dataset
-2. HOPE Control Paper — rule-based beats zero-shot
-3. Medical Jargon Paper — RoBERTa jargon detection on PLABA
-4. TSAR Shared Task Findings 2025
-5. Health QA SPQA — style perturbations reduce correctness
-6. Neumann et al. 2019 — SciSpaCy
+1. TSAR Shared Task Findings (2025) — field context, LLM dominance + safety gaps
+   → motivates why prompting-only fails, sets up diagnostic argument
+
+2. HOPE Control Paper — rule-based baseline beat zero-shot T5 on meaning preservation
+   → directly justifies Baseline 2 (CHV substitution) and Stage 3 Substitution routing
+
+3. Medical Jargon Paper — RoBERTa-large on PLABA jargon detection
+   → prior jargon detection work; our NER+UMLS is the classical NLP comparison
+
+4. Health QA SPQA — style perturbations reduce correctness/completeness
+   → directly motivates warning preservation metric; shows safety failures are real
+
+5. Readability Metrics Paper — LLM-as-judge stronger than traditional formulas
+   → motivates why SARI alone is insufficient; justifies our custom safety metrics
+
+6. Neumann et al. 2019 — SciSpaCy: Fast and Robust Models for Biomedical NLP
+   → directly justifies NER detector choice; biomedical pretraining argument
+
+## PDFs to upload for full entries
+- [ ] TSAR Shared Task PDF
+- [ ] HOPE Control Paper PDF
+- [ ] Medical Jargon Paper PDF
+- [ ] Health QA SPQA PDF
+- [ ] Readability Metrics Paper PDF
+- [ ] Neumann et al. 2019 PDF (find on arXiv: 1902.07669)
 
 ---
 
