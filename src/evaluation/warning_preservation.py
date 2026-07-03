@@ -51,6 +51,8 @@ def compute_warning_preservation_rate(source, simplified):
         'should avoid': ['do not', 'must not', 'avoid'],
         'increased risk': ['higher chance', 'more likely', 'greater risk'],
         'adverse effect': ['side effect', 'unwanted effect', 'harmful effect'],
+        'adverse event': ['harmful side effect', 'harmful effect', 'bad reaction'],
+        'adverse reaction': ['bad reaction', 'harmful reaction'],
     }
 
     for phrase in source_warnings:
