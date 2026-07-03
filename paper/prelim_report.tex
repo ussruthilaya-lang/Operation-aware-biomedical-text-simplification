@@ -20,6 +20,18 @@
 \large Preliminary Report --- Operation Classification and Baselines}
 \author{Sophakotra}
 \date{July 2026}
+% Preliminary report - Rishabh's sections (Introduction, Data, Related Work)
+% Self-contained so it compiles on its own. When merging into the team
+% template, lift the \section blocks and the \bibitem entries as needed.
+
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{times}
+\usepackage{url}
+
+\title{Diagnose Before Simplifying:\\ Operation-Aware Biomedical Text Simplification}
+\author{Sruthilaya \and Rishabh \and Sophakotra \and Zihao}
+\date{}
 
 \begin{document}
 \maketitle
@@ -230,6 +242,151 @@ Simplification.} Proceedings of the TSAR Workshop, EMNLP 2022.
 
 % \bibitem{ehimenlp}  % VERIFY — TSAR winning LLM ensemble system
 % \bibitem{spqa}      % VERIFY — Health QA SPQA style-perturbation paper
+%========================= INTRODUCTION =========================
+\section{Introduction}
+
+Biomedical abstracts are written for clinicians, not patients. They are dense
+with medical jargon, long and syntactically complex sentences, numerical risk
+data, and safety warnings that a lay reader cannot follow. This creates a
+health literacy gap: the people who most need to understand a treatment, a
+risk, or a warning are often unable to read the text that describes it. Low
+health literacy is linked to worse health outcomes, so making biomedical text
+readable is a practical clinical concern, not only a linguistic one.
+
+Most automatic simplification systems treat every kind of complexity the same
+way. A sentence is fed into a model and a simpler sentence is returned, whether
+the difficulty came from a single jargon term, a tangled clause structure, or a
+critical dosage. Directly prompting a language model improves surface
+readability, but it routinely drops medical warnings, weakens risk language, and
+removes clinically important numbers. In other words, uniform simplification
+buys readability at the cost of safety.
+
+We take a diagnostic approach: classify first, then simplify. Before any text is
+rewritten, we identify what type of complexity a span carries, and only then
+apply the operation suited to it. A jargon term can be replaced from a
+controlled vocabulary with no model involved. An unfamiliar concept can be
+explained. An overly specific statement can be generalized. Routing each span to
+the right operation lets us simplify aggressively where it is safe and stay
+conservative where information must be preserved.
+
+Our central research question is: \emph{does predicting the required
+simplification operation at the span level reduce safety-critical information
+loss, compared to rule-based, trained model, and direct LLM simplification
+baselines?} We measure this with custom preservation metrics for entities,
+warning phrases, and numerical expressions, alongside standard readability and
+similarity measures.
+
+%============================= DATA =============================
+\section{Data}
+
+We use PLABA, the Plain Language Adaptation of Biomedical Abstracts dataset
+\cite{attal2023plaba}, released by Attal et al. and used as the official
+benchmark at the TREC 2023 and 2024 PLABA tracks. PLABA contains 750 PubMed
+abstracts retrieved to answer 75 consumer health questions, each manually
+rewritten into plain language by at least one biomedical expert, for 921 gold
+adaptations in total. The data is sentence-aligned, so every source sentence
+maps to its simplified counterpart, and up to four reference simplifications are
+available per sentence for SARI evaluation.
+
+We work with a train, validation, and test split of 635, 138, and 148 sentence
+pairs. An exploratory analysis of the 635 training sentences shows how tangled
+the complexity is: 87.9\% contain medical jargon, 82.7\% are syntactically
+complex beyond vocabulary-level fixes, 60.9\% carry numerical risk data such as
+dosages or odds ratios, and 33.1\% contain safety-critical warning language.Biomedical named entity recognition flags diseases and chemicals requiring careful terminology handling in 87.9\% of sentences, often co-occurring with UMLS jargon signals.
+Critically, 43.6\% of examples carry exactly three of these complexity types and
+60.8\% carry three or more at once. A system that applies a single operation to
+every span will therefore mishandle most inputs in some way, which is the core
+motivation for our operation-aware design.
+
+PLABA does not ship with the span-level operation labels our classifier needs,
+so we derive them through pseudo-labeling from the aligned source and reference
+sentences. We scope the labels to three operations, Substitution, Explanation,
+and Generalization, which are the most frequent and most clinically distinct.
+The Consumer Health Vocabulary and UMLS are used as external knowledge bases in
+the pipeline rather than as training data.
+
+%========================= RELATED WORK =========================
+\section{Related Work}
+
+\paragraph{Datasets.}
+PLABA \cite{attal2023plaba} is the dataset our project is built on. It pairs 750
+biomedical abstracts with expert plain-language rewrites at the sentence level
+and annotates term-level edit types, which makes it well suited to studying
+which operation a given span requires. Its sentence alignment is what lets us
+build source-to-reference pairs and pseudo-label operations rather than treating
+simplification as an opaque sequence-to-sequence task.
+
+\paragraph{Prior PLABA systems.}
+Knappich et al. \cite{knappich2023boschai} describe the BoschAI system that
+ranked first in the PLABA 2023 shared task. Building on Llama 2, they observe
+that source and target share most tokens, which gives a weak training signal and
+produces models that edit conservatively. Their fix is to weight the loss toward
+edited tokens using edit distance and edit operations. Their central finding,
+that fine-tuned models tend to copy the input and edit little, directly
+motivates our diagnostic framing: if a model barely edits, it also barely
+distinguishes a jargon substitution from a critical warning that must be kept.
+Li et al. \cite{li2024beemanc} present the BeeManc system for the same track,
+investigating large language models with controllable attributes for biomedical
+simplification, and provide a strong LLM-based point of comparison for our
+operation-guided generation.
+
+\paragraph{Evaluation metrics.}
+SARI \cite{xu2016sari} is the primary simplification metric and our main quality
+measure. Unlike BLEU or ROUGE, it compares the system output against both the
+source and multiple references, rewarding words that are correctly added,
+kept, and deleted, which is why PLABA provides several references per sentence.
+BERTScore \cite{zhang2020bertscore} complements SARI by measuring semantic
+similarity through contextual embeddings rather than surface overlap; we compute
+it with a biomedical model so that domain terms are matched fairly. Neither
+metric captures whether a warning or a dosage survived simplification, which is
+the gap our custom preservation metrics are designed to fill.
+
+\paragraph{Health literacy and readability.}
+Berkman et al. \cite{berkman2011health} show through a systematic review that low
+health literacy is associated with worse health outcomes, which grounds the
+practical need for this work. Readability itself is commonly measured with the
+Flesch-Kincaid Grade Level \cite{kincaid1975fkgl}, which we report so that
+readability gains can be weighed against the safety costs they may carry.
+
+%========================= REFERENCES =========================
+\begin{thebibliography}{9}
+
+\bibitem{attal2023plaba}
+Attal, K., Ondov, B., \& Demner-Fushman, D. (2023).
+A dataset for plain language adaptation of biomedical abstracts.
+\emph{Scientific Data}, 10(1), 8.
+
+\bibitem{knappich2023boschai}
+Knappich, V., Razniewski, S., \& Friedrich, A. (2023).
+BoschAI @ PLABA 2023: Leveraging edit operations in end-to-end neural sentence
+simplification. \emph{arXiv preprint arXiv:2311.01907}.
+
+\bibitem{li2024beemanc}
+Li, Z., Belkadi, S., Micheletti, N., Han, L., Shardlow, M., \& Nenadic, G.
+(2024). BeeManc at the PLABA track of TAC-2023: Investigating LLMs and
+controllable attributes for improving biomedical text readability.
+\emph{arXiv preprint}.
+
+\bibitem{xu2016sari}
+Xu, W., Napoles, C., Pavlick, E., Chen, Q., \& Callison-Burch, C. (2016).
+Optimizing statistical machine translation for text simplification.
+\emph{Transactions of the Association for Computational Linguistics}, 4,
+401--415.
+
+\bibitem{zhang2020bertscore}
+Zhang, T., Kishore, V., Wu, F., Weinberger, K. Q., \& Artzi, Y. (2020).
+BERTScore: Evaluating text generation with BERT.
+\emph{International Conference on Learning Representations (ICLR)}.
+
+\bibitem{berkman2011health}
+Berkman, N. D., Sheridan, S. L., Donahue, K. E., Halpern, D. J., \& Crotty, K.
+(2011). Low health literacy and health outcomes: An updated systematic review.
+\emph{Annals of Internal Medicine}, 155(2), 97--107.
+
+\bibitem{kincaid1975fkgl}
+Kincaid, J. P., Fishburne, R. P., Rogers, R. L., \& Chissom, B. S. (1975).
+Derivation of new readability formulas for Navy enlisted personnel.
+\emph{Naval Technical Training Command Research Branch Report 8-75}.
 
 \end{thebibliography}
 
