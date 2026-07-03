@@ -6,10 +6,8 @@ import json
 EXPANSION_THRESHOLD = 1.15      # target >= 15% longer  -> Explanation
 COMPRESSION_THRESHOLD = 0.85    # target <= 15% shorter -> Generalization
 
-# For similar-length pairs, we only call it a Substitution if enough characters
-# actually changed. Below this, the sentence was essentially copied — a near
-# no-op that would be noise in the training set.
-MIN_EDIT_RATIO_FOR_SUBSTITUTION = 0.10   # >=10% of characters changed
+# For similar-length pairs, we default to Substitution after ruling out
+# Explanation/Generalization by length ratio.
 
 
 def _levenshtein(a, b):
