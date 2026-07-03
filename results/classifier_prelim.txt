@@ -1,0 +1,21 @@
+TF-IDF + Logistic Regression — Operation Classifier
+Train pairs: 6307   Val pairs: 1431
+
+Accuracy: 0.431
+Macro-F1: 0.424
+
+                precision    recall  f1-score   support
+
+  Substitution      0.471     0.481     0.476       611
+   Explanation      0.427     0.351     0.385       464
+Generalization      0.376     0.449     0.410       356
+
+      accuracy                          0.431      1431
+     macro avg      0.425     0.427     0.424      1431
+  weighted avg      0.433     0.431     0.430      1431
+
+Confusion matrix (rows=true, cols=pred):
+labels: ['Substitution', 'Explanation', 'Generalization']
+[[294 150 167]
+ [203 163  98]
+ [127  69 160]]
