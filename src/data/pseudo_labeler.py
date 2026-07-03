@@ -70,14 +70,8 @@ def label_span(source_span, target_span):
     if length_ratio <= COMPRESSION_THRESHOLD:
         return "Generalization"
 
-    # Similar length: distinguish a genuine word-swap from a near-copy.
-    edit_ratio = _normalized_edit_distance(source_span, target_span)
-    if edit_ratio >= MIN_EDIT_RATIO_FOR_SUBSTITUTION:
-        return "Substitution"
-
-    # Similar length AND barely changed -> the writer essentially kept it.
-    # We still owe the 3-class taxonomy a label; a light rewrite that swaps a
-    # few words is the closest operation, so it stays Substitution.
+    # Similar length: treat as Substitution (length-based heuristics already ruled
+    # out Explanation/Generalization).
     return "Substitution"
 
     #Following main instruction
