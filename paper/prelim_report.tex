@@ -1,0 +1,236 @@
+% Preliminary Report — Sophakotra's sections
+% Operation Classification + Baselines + Literature Review
+%
+% This is a self-contained, compilable document so you can check your sections
+% in isolation. To merge into the team's shared prelim_report.tex, copy the
+% \section blocks and the relevant \bibitem entries.
+%
+% All numbers below are the actual outputs of:
+%   python -m src.data.pseudo_labeler
+%   python -m src.classifier.tfidf_classifier
+%   python -m src.baselines.baseline3_direct_llm
+
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\title{Operation-Aware Biomedical Text Simplification\\
+\large Preliminary Report --- Operation Classification and Baselines}
+\author{Sophakotra}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+%======================================================================
+\section{Operation Classification}
+%======================================================================
+
+The central contribution of our system is a \emph{diagnostic} step: before
+simplifying a span of biomedical text, we predict \emph{which} simplification
+operation it requires. We adopt the three-operation taxonomy of
+Heineman et al.~\cite{salsa}: \textbf{Substitution} (replacing a jargon term
+with a plain-language equivalent), \textbf{Explanation} (adding words to unpack
+a concept), and \textbf{Generalization} (compressing or removing detail). While
+prior PLABA systems apply a single undifferentiated simplification model, we
+argue that routing each span to the appropriate operation is what preserves
+safety-critical information.
+
+\paragraph{Pseudo-labeling.}
+Span-level operation labels are not available in PLABA, so we derive them by
+weak supervision from the source$\rightarrow$target sentence pairs. The
+\emph{type} of edit a human writer performed leaves a measurable fingerprint on
+the text: an Explanation lengthens the sentence, a Generalization shortens it,
+and a Substitution changes many characters while keeping the length roughly
+constant. Concretely, let $r = |t| / |s|$ be the target/source word-length
+ratio. We label a pair Explanation if $r \ge 1.15$, Generalization if
+$r \le 0.85$, and otherwise Substitution, using normalized character-level edit
+distance to confirm that similar-length pairs were genuinely rewritten rather
+than copied. Edit distance is the most direct measurable signal of the kind of
+change made, and requires no gold annotation --- standard weakly-supervised
+practice.
+
+\paragraph{Data and leakage control.}
+The PLABA release (\texttt{data.json}) is the full corpus and contains the
+abstracts held out in the official validation and test splits. To avoid
+train/test leakage, we exclude every validation and test PMID from the training
+pairs at the source level. This yields \textbf{6{,}307} pseudo-labeled training
+sentence pairs, distributed across the three operations as shown in
+Table~\ref{tab:dist}. We evaluate on \textbf{1{,}431} sentence pairs built from
+the held-out validation PMIDs and pseudo-labeled identically.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Operation & Train pairs & Share \\
+\midrule
+Substitution   & 2{,}723 & 43.2\% \\
+Explanation    & 2{,}167 & 34.4\% \\
+Generalization & 1{,}417 & 22.5\% \\
+\midrule
+Total          & 6{,}307 & 100\% \\
+\bottomrule
+\end{tabular}
+\caption{Pseudo-labeled operation distribution on the leakage-free training set.}
+\label{tab:dist}
+\end{table}
+
+\paragraph{Three-model progression.}
+We plan a controlled progression of classifiers, each isolating one variable:
+(i) \textbf{TF-IDF + Logistic Regression} tests whether surface lexical features
+alone predict the operation; (ii) \textbf{BERT-base}~\cite{bert} adds general
+contextual pretraining; and (iii) \textbf{BioBERT}~\cite{biobert} adds
+biomedical-domain pretraining on top. Reporting all three localizes exactly
+where any gains originate. This preliminary report covers the TF-IDF baseline;
+the contextual models follow in the full paper.
+
+\paragraph{Preliminary results.}
+The classifier receives only the \emph{source} sentence, since in the full
+pipeline the operation must be chosen before the simplified text is generated.
+Using $(1,2)$-gram TF-IDF features (\texttt{max\_features}\,=\,50{,}000) and
+Logistic Regression with balanced class weights, the model attains
+\textbf{0.431} accuracy and \textbf{0.424} macro-F1 on the validation set
+(Table~\ref{tab:cls}). Although accuracy is close to the majority-class rate
+($0.427$), the macro-F1 is far above the corresponding majority baseline
+($\approx 0.20$), confirming that the model makes balanced predictions across
+all three classes rather than collapsing to the majority. The confusion matrix
+(Table~\ref{tab:cm}) shows the strongest confusion between Substitution and
+Explanation, consistent with the fact that both often preserve sentence length.
+These results establish a weak-but-nontrivial lower bound and motivate the
+contextual models, which can capture semantic and structural cues unavailable
+to bag-of-words features.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+ & Precision & Recall & F1 \\
+\midrule
+Substitution   & 0.471 & 0.481 & 0.476 \\
+Explanation    & 0.427 & 0.351 & 0.385 \\
+Generalization & 0.376 & 0.449 & 0.410 \\
+\midrule
+Macro avg      & 0.425 & 0.427 & 0.424 \\
+Accuracy       & \multicolumn{3}{c}{0.431 (n = 1{,}431)} \\
+\bottomrule
+\end{tabular}
+\caption{TF-IDF + Logistic Regression, per-class results on the validation set.}
+\label{tab:cls}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+True $\backslash$ Pred & Sub & Exp & Gen \\
+\midrule
+Substitution   & 294 & 150 & 167 \\
+Explanation    & 203 & 163 &  98 \\
+Generalization & 127 &  69 & 160 \\
+\bottomrule
+\end{tabular}
+\caption{Confusion matrix (rows = true, columns = predicted).}
+\label{tab:cm}
+\end{table}
+
+%======================================================================
+\section{Baselines}
+%======================================================================
+
+We frame our baselines as a comparison ladder anchored on \emph{warning
+preservation} --- the fraction of source warning phrases that survive
+simplification. This metric targets safety-critical information loss that
+n-gram metrics such as ROUGE ignore.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lc}
+\toprule
+Baseline & Warning preservation \\
+\midrule
+No simplification (ceiling)         & 1.000 \\
+Rule-based CHV substitution         & 0.994 \\
+Direct LLM prompting (FLAN-T5-Base) & 0.950 \\
+Operation-aware system (ours)       & TBD \\
+\bottomrule
+\end{tabular}
+\caption{Warning preservation across baselines. Direct LLM prompting loses the
+most safety-critical information.}
+\label{tab:baselines}
+\end{table}
+
+\textbf{Baseline 1 (no simplification)} leaves the text unchanged and thus
+trivially preserves all warnings (1.000); it is the safety ceiling against which
+no system should be expected to improve. \textbf{Baseline 2 (rule-based CHV
+substitution)} performs Consumer Health Vocabulary term replacement and sentence
+splitting, preserving 99.4\% of warnings --- auditable and low-risk, but limited
+to vocabulary-level edits. \textbf{Baseline 3 (direct LLM prompting)} is the
+deliberately naive approach our system argues against: we prompt an
+instruction-tuned open-source LLM (FLAN-T5-Base) to ``simplify this biomedical
+sentence for a patient,'' with no operation guidance and no safety constraint.
+We run it locally to keep the baseline fully reproducible (no paid API).
+
+On a 30-sentence sample restricted to warning-bearing sentences, direct LLM
+prompting preserved only \textbf{95.0\%} of source warnings --- measurably below
+both the rule-based baseline (99.4\%) and the do-nothing ceiling (100\%). This
+confirms our central premise: unguided LLM simplification sacrifices
+safety-critical information that conservative methods retain, motivating the
+operation-aware routing our full system introduces. The three baselines together
+bracket the safety--fluency trade-off our system must navigate.
+
+%======================================================================
+\section*{Literature Review}
+%======================================================================
+
+\textbf{SALSA edit taxonomy}~\cite{salsa} defines the fine-grained edit
+operations that underpin our three-way operation taxonomy, directly grounding
+our Substitution/Explanation/Generalization labels. The \textbf{PLABA
+dataset}~\cite{plaba} provides the sentence-aligned source--adaptation pairs we
+pseudo-label. \textbf{BERT}~\cite{bert} and \textbf{BioBERT}~\cite{biobert}
+motivate the contextual and biomedical-domain classifiers in our model
+progression. The \textbf{TSAR shared task}~\cite{tsar} documents the field's
+shift toward LLM-based simplification and the accompanying safety gaps that
+motivate our diagnostic, safety-first framing.
+
+% VERIFY: the two entries below need confirmed bibliographic details before
+% submission. Fill in authors/venue/year, then uncomment the \bibitem lines.
+% - EhiMeNLP TSAR winner (best LLM ensemble)
+% - Health QA SPQA (style perturbations reduce correctness/completeness)
+
+\begin{thebibliography}{9}
+
+\bibitem{salsa}
+Heineman, D., Dou, Y., Maddela, M., \& Xu, W. (2023).
+\emph{Dancing Between Success and Failure: Edit-level Simplification Evaluation
+using SALSA.} EMNLP 2023. arXiv:2305.14458.
+
+\bibitem{plaba}
+Attal, K., Ondov, B., \& Demner-Fushman, D. (2023).
+\emph{A dataset for plain language adaptation of biomedical abstracts.}
+Scientific Data, 10(1), 8.
+
+\bibitem{bert}
+Devlin, J., Chang, M.-W., Lee, K., \& Toutanova, K. (2019).
+\emph{BERT: Pre-training of Deep Bidirectional Transformers for Language
+Understanding.} NAACL-HLT.
+
+\bibitem{biobert}
+Lee, J., Yoon, W., Kim, S., Kim, D., Kim, S., So, C.~H., \& Kang, J. (2020).
+\emph{BioBERT: a pre-trained biomedical language representation model for
+biomedical text mining.} Bioinformatics, 36(4), 1234--1240.
+
+\bibitem{tsar}
+Saggion, H., \v{S}tajner, S., Ferr\'es, D., et al. (2022).
+\emph{Findings of the TSAR-2022 Shared Task on Multilingual Lexical
+Simplification.} Proceedings of the TSAR Workshop, EMNLP 2022.
+% VERIFY exact author list / page numbers.
+
+% \bibitem{ehimenlp}  % VERIFY — TSAR winning LLM ensemble system
+% \bibitem{spqa}      % VERIFY — Health QA SPQA style-perturbation paper
+
+\end{thebibliography}
+
+\end{document}
