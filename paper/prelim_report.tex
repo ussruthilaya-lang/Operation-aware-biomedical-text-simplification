@@ -391,3 +391,200 @@ Derivation of new readability formulas for Navy enlisted personnel.
 \end{thebibliography}
 
 \end{document}
+
+%======================================================================
+% Preliminary report - Zihao's sections (Results, Conclusion, Lit Review)
+% Self-contained so it compiles on its own. Merge into the team template
+% by lifting the \section blocks and \bibitem entries.
+%
+% All numbers below are the actual outputs of:
+%   python -m src.evaluation.run_evaluation
+% written to results/prelim_evaluation.csv on 50 val sentences (seed=42).
+%======================================================================
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{times}
+\usepackage{url}
+\title{Diagnose Before Simplifying:\\ Operation-Aware Biomedical Text Simplification}
+\author{Sruthilaya \and Rishabh \and Sophakotra \and Zihao}
+\date{}
+\begin{document}
+\maketitle
+
+%======================================================================
+\section{Preliminary Results}
+%======================================================================
+
+We report preliminary numbers on a 50-sentence random sample of the PLABA
+validation set (fixed seed 42). At this stage we evaluate two of the six planned
+systems: Baseline~1 (no simplification), which anchors the safety ceiling, and
+Baseline~2 (rule-based CHV substitution with sentence splitting). The neural
+baselines (Lay-SciFive, BART-w-CTs), the direct-LLM prompt, and our
+operation-aware system are deferred to the final paper.
+
+For each system we compute four metrics: SARI~\cite{sari}, which is the standard
+n-gram edit metric against reference simplifications; Flesch--Kincaid Grade
+Level (FKGL)~\cite{kincaid_fkgl}, a readability score where lower is easier and
+grade~8 is the target for patient-facing text; compression ratio, the word-count
+ratio of output to source; and warning preservation, our custom safety metric
+that measures the fraction of source warning phrases retained after
+simplification.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+System & SARI $\uparrow$ & FKGL $\downarrow$ & Compression & Warning Pres. $\uparrow$ \\
+\midrule
+Baseline 1: no simplification & 16.53 & 15.03 & 1.00 & 1.00 \\
+Baseline 2: rule-based CHV    & 19.31 & 14.34 & 1.01 & 1.00 \\
+\bottomrule
+\end{tabular}
+\caption{Preliminary results on a 50-sentence sample of PLABA val.
+Neural and LLM baselines are reported in the final paper.}
+\label{tab:prelim_results}
+\end{table}
+
+Two observations frame the story we will tell in the final paper. First, both
+baselines score at the safety ceiling (warning preservation $=1.00$), because
+neither performs the aggressive rewriting that drops warning phrases in the
+first place. Second, both baselines are readability failures: FKGL~$>14$ means
+the text still reads at a college level, far above the grade-8 target for
+patient-facing content. Rule-based substitution nudges SARI upward
+(16.53~$\rightarrow$~19.31) but barely dents readability, because swapping
+individual jargon terms does nothing to sentence structure.
+
+The gap this table sets up is the point of the paper. Any system that
+substantially improves SARI and FKGL must do so by editing more aggressively,
+and aggressive editing is exactly where safety-critical content gets dropped.
+Once the neural and LLM baselines are added, we expect them to score higher on
+SARI and FKGL but lower on warning preservation. If that pattern holds, it is
+direct evidence that a single readability-oriented metric like SARI is
+insufficient for healthcare NLP and motivates our operation-aware design, which
+routes edits through a diagnostic classifier before generation.
+
+%======================================================================
+\section{Conclusion and Next Steps}
+%======================================================================
+
+Our preliminary results are consistent with the diagnostic framing of the
+paper. Two systems that do not perform aggressive rewriting sit at the safety
+ceiling on warning preservation but fail to bring readability into the target
+range for patient-facing text. This is the expected shape of the safety
+versus readability trade-off, and it is what the operation-aware system is
+designed to break.
+
+For the final evaluation, three additions complete the picture. We will add
+neural baselines (Lay-SciFive~\cite{layscifive}, BART-w-CTs~\cite{bartwcts}) and
+a direct-LLM prompt to populate the middle of the trade-off curve, and evaluate
+our operation-aware system against all five. We will extend the safety metric
+set with entity preservation and numerical expression preservation, since
+warnings alone do not cover all safety-critical content in biomedical text.
+Finally, we will run the full evaluation on the complete test set rather than a
+50-sentence sample. If the operation-aware system Pareto-dominates the neural
+and LLM baselines on the (SARI, warning preservation) plane, that is the
+finding the paper reports.
+
+%======================================================================
+\section*{Literature Review}
+%======================================================================
+
+We situate our contribution against five threads of prior work: PLABA shared
+task systems (which set the SARI targets we compare against), pretrained
+sequence-to-sequence models used as neural baselines, evaluation methodology
+for simplification, and diagnostic or operation-aware simplification frameworks.
+
+\paragraph{PLABA 2023 top systems.}
+Knappich et al.~\cite{knappich2023boschai} report the winning BoschAI system on
+PLABA 2023, based on fine-tuned Llama~2 with sentence-level and token-level
+edit-weighted loss functions that penalize conservative copying. Their result defines the SARI ceiling we
+aim to match with our neural baselines and demonstrates that readability-tuned
+generation is the current state-of-the-art on this benchmark. UoL-UPF's
+runner-up system~\cite{uolupf2023} uses minimum Bayes risk decoding and
+explicitly criticizes SARI as an incomplete metric for the task -- an argument
+we build on directly, extending it with safety-oriented preservation metrics.
+
+\paragraph{Pretrained seq2seq baselines.}
+BART~\cite{bart} is the encoder-decoder backbone underlying most PLABA systems,
+including the BART-w-CTs baseline we plan to run for the final paper. Including
+it in our comparison isolates how much of the operation-aware system's
+improvement comes from the diagnostic step, versus generic seq2seq fine-tuning
+on PLABA.
+
+\paragraph{Simplification evaluation methodology.}
+Alva-Manchego et al.~\cite{alvamanchego2021unsuitability} conduct a meta-evaluation
+of automatic metrics for text simplification and argue that SARI and FKGL correlate
+only moderately with human judgments, particularly when multiple rewriting operations
+are combined in a single output. We adopt SARI and FKGL as
+standard-issue metrics for comparability with PLABA leaderboards, but complement
+them with our own safety-oriented metrics precisely because SARI does not
+penalize dropping a warning phrase.
+
+\paragraph{Prior operation-aware simplification.}
+Two lines of work directly motivate our diagnostic step. Cripwell et
+al.~\cite{cripwell2022operation} propose controllable sentence simplification via
+operation classification, framing simplification as a two-stage predict-then-execute
+process, which is the same structural intuition our system extends to the biomedical
+domain and the span level. Devaraj et al.~\cite{devaraj2021medical} study
+paragraph-level simplification of medical texts and identify safety-critical
+information loss as a recurring failure mode, providing the biomedical grounding for
+why safety-oriented evaluation is needed in this domain.
+\begin{thebibliography}{9}
+
+\bibitem{sari}
+Xu, W., Napoles, C., Pavlick, E., Chen, Q., \& Callison-Burch, C. (2016).
+Optimizing Statistical Machine Translation for Text Simplification.
+\emph{Transactions of the Association for Computational Linguistics}, 4, 401--415.
+
+\bibitem{kincaid_fkgl}
+Kincaid, J. P., Fishburne, R. P., Rogers, R. L., \& Chissom, B. S. (1975).
+Derivation of New Readability Formulas for Navy Enlisted Personnel.
+\emph{Naval Technical Training Command Research Branch Report 8-75}.
+
+\bibitem{knappich2023boschai}
+Knappich, V., Razniewski, S., \& Friedrich, A. (2023).
+BoschAI @ PLABA 2023: Leveraging Edit Operations in End-to-End Neural
+Sentence Simplification. \emph{arXiv preprint arXiv:2311.01907}.
+
+\bibitem{li2024beemanc}
+Li, Z., Belkadi, S., Micheletti, N., Han, L., Shardlow, M., \& Nenadic, G. (2024).
+Large Language Models for Biomedical Text Simplification: Promising But Not There Yet.
+\emph{arXiv preprint arXiv:2408.03871}.
+
+\bibitem{layscifive}
+Li, Z., Belkadi, S., Micheletti, N., Han, L., Shardlow, M., \& Nenadic, G. (2024).
+Large Language Models for Biomedical Text Simplification: Promising But Not There Yet.
+\emph{arXiv preprint arXiv:2408.03871}.
+
+\bibitem{bartwcts}
+Li, Z., Belkadi, S., Micheletti, N., Han, L., Shardlow, M., \& Nenadic, G. (2024).
+Large Language Models for Biomedical Text Simplification: Promising But Not There Yet.
+\emph{arXiv preprint arXiv:2408.03871}.
+
+\bibitem{bart}
+Lewis, M., Liu, Y., Goyal, N., Ghazvininejad, M., Mohamed, A., Levy, O.,
+Stoyanov, V., \& Zettlemoyer, L. (2020).
+BART: Denoising Sequence-to-Sequence Pre-training for Natural Language
+Generation, Translation, and Comprehension.
+\emph{Proceedings of ACL}, 7871--7880.
+
+\bibitem{alvamanchego2021unsuitability}
+Alva-Manchego, F., Scarton, C., \& Specia, L. (2021).
+The (Un)Suitability of Automatic Evaluation Metrics for Text Simplification.
+\emph{Computational Linguistics}, 47(4), 861--889.
+
+\bibitem{cripwell2022operation}
+Cripwell, L., Legrand, J., \& Gardent, C. (2022).
+Controllable Sentence Simplification via Operation Classification.
+\emph{Findings of NAACL 2022}, 2091--2103.
+
+\bibitem{devaraj2021medical}
+Devaraj, A., Marshall, I. J., Wallace, B. C., \& Li, J. J. (2021).
+Paragraph-level Simplification of Medical Texts.
+\emph{Proceedings of NAACL-HLT 2021}, 4972--4984.
+
+\end{thebibliography}
+
+\end{document}
