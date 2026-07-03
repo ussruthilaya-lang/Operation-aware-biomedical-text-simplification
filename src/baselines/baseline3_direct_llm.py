@@ -34,6 +34,7 @@ def _load(model=MODEL_NAME):
         print(f"Loading {model} on {_device.upper()} ...")
         _tokenizer = AutoTokenizer.from_pretrained(model)
         _model = AutoModelForSeq2SeqLM.from_pretrained(model).to(_device)
+        _model.eval()
     return _model, _tokenizer
 
 
