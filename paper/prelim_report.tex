@@ -203,7 +203,7 @@ our Substitution/Explanation/Generalization labels. The \textbf{PLABA
 dataset}~\cite{plaba} provides the sentence-aligned source--adaptation pairs we
 pseudo-label. \textbf{BERT}~\cite{bert} and \textbf{BioBERT}~\cite{biobert}
 motivate the contextual and biomedical-domain classifiers in our model
-progression. The \textbf{TSAR shared task}~\cite{tsar} documents the field's
+progression. The \textbf{TSAR shared task}~\cite{alvamanchego2025tsarfindings} documents the field's
 shift toward LLM-based simplification and the accompanying safety gaps that
 motivate our diagnostic, safety-first framing.
 
@@ -234,10 +234,12 @@ Lee, J., Yoon, W., Kim, S., Kim, D., Kim, S., So, C.~H., \& Kang, J. (2020).
 \emph{BioBERT: a pre-trained biomedical language representation model for
 biomedical text mining.} Bioinformatics, 36(4), 1234--1240.
 
-\bibitem{tsar}
-Saggion, H., \v{S}tajner, S., Ferr\'es, D., et al. (2022).
-\emph{Findings of the TSAR-2022 Shared Task on Multilingual Lexical
-Simplification.} Proceedings of the TSAR Workshop, EMNLP 2022.
+\bibitem{alvamanchego2025tsarfindings}
+Alva-Manchego, F., Stodden, R., Imperial, J. M., Barayan, A., North, K.,
+\& Tayyar Madabushi, H. (2025). Findings of the TSAR 2025 Shared Task on
+Readability-Controlled Text Simplification. Proceedings of the Fourth
+Workshop on Text Simplification, Accessibility and Readability (TSAR 2025),
+116--130.
 % VERIFY exact author list / page numbers.
 
 % \bibitem{ehimenlp}  % VERIFY — TSAR winning LLM ensemble system
@@ -477,7 +479,7 @@ versus readability trade-off, and it is what the operation-aware system is
 designed to break.
 
 For the final evaluation, three additions complete the picture. We will add
-neural baselines (Lay-SciFive~\cite{layscifive}, BART-w-CTs~\cite{bartwcts}) and
+neural baselines (Lay-SciFive and BART-w-CTs~\cite{li2024beemanc}) and
 a direct-LLM prompt to populate the middle of the trade-off curve, and evaluate
 our operation-aware system against all five. We will extend the safety metric
 set with entity preservation and numerical expression preservation, since
@@ -549,16 +551,6 @@ BoschAI @ PLABA 2023: Leveraging Edit Operations in End-to-End Neural
 Sentence Simplification. \emph{arXiv preprint arXiv:2311.01907}.
 
 \bibitem{li2024beemanc}
-Li, Z., Belkadi, S., Micheletti, N., Han, L., Shardlow, M., \& Nenadic, G. (2024).
-Large Language Models for Biomedical Text Simplification: Promising But Not There Yet.
-\emph{arXiv preprint arXiv:2408.03871}.
-
-\bibitem{layscifive}
-Li, Z., Belkadi, S., Micheletti, N., Han, L., Shardlow, M., \& Nenadic, G. (2024).
-Large Language Models for Biomedical Text Simplification: Promising But Not There Yet.
-\emph{arXiv preprint arXiv:2408.03871}.
-
-\bibitem{bartwcts}
 Li, Z., Belkadi, S., Micheletti, N., Han, L., Shardlow, M., \& Nenadic, G. (2024).
 Large Language Models for Biomedical Text Simplification: Promising But Not There Yet.
 \emph{arXiv preprint arXiv:2408.03871}.

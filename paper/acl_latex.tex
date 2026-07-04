@@ -1,0 +1,386 @@
+\documentclass[11pt]{article}
+
+% Change "review" to "final" to generate the final (camera-ready) version.
+\usepackage[final]{acl}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\IfFileExists{inconsolata.sty}{\usepackage{inconsolata}}{}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+\title{Diagnose Before Simplifying: Operation-Aware Biomedical Text Simplification}
+
+\author{Sruthilaya \and Rishabh \and Sophakotra \and Zihao \\
+  NLP Course Research Project \\
+  \texttt{\{sruthilaya, rishabh, sophakotra, zihao\}@northeastern.edu}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Biomedical abstracts are written for clinicians, not patients.
+Simplification systems that treat every span the same way either
+under-edit or over-edit: rule-based lexical substitution is safe but
+structurally limited to swapping terms, while unguided LLM prompting can
+rewrite freely but risks dropping warnings and dosages in the process. We
+reframe simplification as a diagnostic task: before rewriting a span,
+classify which operation it requires-Substitution, Explanation, or
+Generalization-and route it accordingly. On PLABA, pseudo-labeled
+operation distributions show that 56.9\% of required edits are Explanation
+or Generalization, operations a purely lexical baseline cannot perform by
+construction, motivating generation beyond simple substitution. We present
+the first stage of this pipeline: five handcrafted complexity detectors, a
+pseudo-labeling scheme deriving span-level operation labels from aligned
+source-target pairs, a TF-IDF classifier baseline, and safety-preservation
+metrics measuring what SARI misses. On a random 50-sentence sample,
+unguided LLM prompting achieves the highest SARI (22.28 vs.\ 16.82 for no
+simplification) at near-neutral compression (0.945), with all baselines
+preserving warnings perfectly; however, a warning-stratified stress test
+(n=30 warning-bearing sentences) reveals unguided prompting is the only
+baseline that drops safety-critical content (0.950 preservation vs.\
+1.000 for rule-based substitution and no simplification)- demonstrating
+that random-sample evaluation alone is insufficient to detect the safety
+failures that motivate our operation-aware design.
+\end{abstract}
+
+\section{Introduction}
+
+Biomedical abstracts are written for clinicians, not patients. They are dense
+with medical jargon, long and syntactically complex sentences, numerical risk
+data, and safety warnings that a lay reader cannot follow. This creates a
+health literacy gap: the people who most need to understand a treatment, a
+risk, or a warning are often unable to read the text that describes it. Low
+health literacy is linked to worse health outcomes \citep{berkman2011health},
+so making biomedical text readable is a practical clinical concern, not only
+a linguistic one.
+
+Most automatic simplification systems treat every kind of complexity the same
+way. A sentence is fed into a model and a simpler sentence is returned, whether
+the difficulty came from a single jargon term, a tangled clause structure, or a
+critical dosage. Directly prompting a language model improves surface readability, but prior
+work and our own preliminary evaluation show it can drop medical warnings,
+weaken risk language, and remove clinically important numbers---failures that are easy to miss under naive random-sample evaluation (Section~5). In other words, uniform simplification
+buys readability at the cost of safety.
+
+We take a diagnostic approach: classify first, then simplify. Before any text is
+rewritten, we identify what type of complexity a span carries, and only then
+apply the operation suited to it. A jargon term can be replaced from a
+controlled vocabulary with no model involved. An unfamiliar concept can be
+explained. An overly specific statement can be generalized. Routing each span to
+the right operation lets us simplify aggressively where it is safe and stay
+conservative where information must be preserved.
+
+Our central research question is: \emph{does predicting the required
+simplification operation at the span level reduce safety-critical information
+loss, compared to rule-based, trained model, and direct LLM simplification
+baselines?} We measure this with custom preservation metrics for entities,
+warning phrases, and numerical expressions, alongside standard readability and
+similarity measures.
+
+\section{Data}
+
+We use PLABA, the Plain Language Adaptation of Biomedical Abstracts dataset
+\citep{attal2023plaba}, the official benchmark at the TREC 2023 and 2024 PLABA
+tracks. PLABA contains 750 PubMed abstracts retrieved to answer consumer health
+questions, each manually rewritten into plain language by at least one
+biomedical expert. We work with a train, validation, and test split of 635,
+138, and 148 abstract-level source-target pairs. For sentence-level analysis
+(pseudo-labeling, complexity detection, and classifier training), we further
+align PLABA's underlying \texttt{data.json} on shared sentence indices between
+source abstracts and their adaptations, yielding 6{,}307 leakage-free
+sentence-level training pairs (Section 5).
+
+An exploratory analysis of the 635 training abstracts shows the
+complexity is multidimensional: $87.9\%$ contain medical jargon,
+$82.7\%$ are syntactically complex, $60.9\%$ carry numerical risk data,
+and $33.1\%$ contain safety-critical warnings, with $60.8\%$ of abstracts
+exhibiting three or more of these simultaneously
+(Table~\ref{tab:cooccurrence}). A system applying one operation to every
+span will therefore mishandle most inputs, motivating our operation-aware
+design.
+
+PLABA does not ship with the span-level operation labels our classifier needs,
+so we derive them through pseudo-labeling from the aligned source and reference
+sentences (Section~\ref{sec:classifier}). We scope the labels to three of
+PLABA's five original operations \citep{attal2023plaba}---Substitution,
+Explanation, and Generalization---which together account for over 90\% of
+observed replacements \citep{ondov2025lessons} (Section~\ref{sec:classifier}
+gives the full breakdown). The Consumer Health Vocabulary (CHV) and UMLS are
+used as external knowledge bases in the pipeline rather than as training data.
+
+\begin{table}[t]
+  \centering
+  \begin{tabular}{crr}
+    \toprule
+    \textbf{Detectors firing} & \textbf{Abstracts} & \textbf{\%} \\
+    \midrule
+    0 & 9 & 1.4 \\
+    1 & 67 & 10.6 \\
+    2 & 173 & 27.2 \\
+    3 & 277 & 43.6 \\
+    4 & 109 & 17.2 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Complexity co-occurrence on the PLABA training set ($n=635$
+    abstracts). Most abstracts carry three or more simultaneous
+    complexity types.}
+  \label{tab:cooccurrence}
+\end{table}
+
+\section{Complexity Detection}
+\label{sec:complexity}
+
+Stage 1 of the pipeline is pure classical NLP: no learned model and no
+prompting. The design principle is that complexity in biomedical text is not one
+problem but several overlapping ones, and each signal is best captured by the
+paradigm suited to it. We implement five handcrafted detectors, each targeting a
+distinct complexity type.
+
+\paragraph{Numerical expressions.} A regular-expression extractor flags
+dosages, risk ratios, confidence intervals, $p$-values, and percentages.
+Numbers are exactly what uniform simplification tends to drop or distort,
+and a dropped dosage is a safety failure, not a stylistic one.
+
+\paragraph{Warning cues.} A handbuilt lexicon detects safety-critical
+language across six categories (contraindications, risk alerts,
+avoidance, interactions, overdose, adverse effects), giving full
+auditability and zero hallucination risk. This lexicon also grounds our
+warning-preservation metric (Section~\ref{sec:metrics}).
+
+\paragraph{Biomedical named entities.} We use SciSpaCy's
+\texttt{en\_ner\_bc5cdr\_md} \citep{neumann2019scispacy} to detect diseases
+and chemicals; general-domain models miss terms like \emph{nephrotoxicity}.
+Detected entities are the primary targets for Substitution.
+
+\paragraph{Syntactic depth.} A dependency-tree depth calculator flags
+structurally complex sentences, since parse-tree depth captures genuine
+nesting that sentence length alone penalizes unfairly.
+
+\paragraph{UMLS jargon.} A matcher flags medical terms absent from common
+English. For this preliminary stage we use a morphological fallback
+(biomedical suffixes and drug-naming conventions); the full QuickUMLS
+interface is implemented and ready for integration.
+
+No single paradigm captures everything: regular expressions catch numbers but
+miss entities, lexicons catch warnings but miss structure, and NER catches
+entities but misses jargon that is not a named entity. Using five detectors is a
+deliberate design choice reflecting the multidimensional nature of the problem
+documented in Table~\ref{tab:cooccurrence}. Because these detectors rely on
+handcrafted patterns, their flag rates are a conservative lower bound on the true
+complexity present.
+
+\section{Operation Classification}
+\label{sec:classifier}
+
+Predicting the operation a span requires is the research centerpiece. Crucially,
+the classifier sees only the \emph{source} sentence: at inference time no target
+exists, so any feature derived from the reference would be leakage.
+
+\paragraph{Pseudo-labeling.} Because PLABA lacks public span-level operation
+labels, we derive them by weak supervision from aligned source--target pairs. We
+sentence-align \texttt{data.json} on shared sentence indices, iterate every
+available adaptation to maximize volume, and exclude all validation and test
+PMIDs to prevent leakage. Each pair is labeled by a length-ratio rule with an
+edit-distance tiebreak: a target at least $15\%$ longer is an Explanation, one at
+least $15\%$ shorter is a Generalization, and a similar-length pair with
+sufficient character-level change is a Substitution. This yields $6{,}307$
+labeled training pairs ($43\%$ Substitution, $34\%$ Explanation, $23\%$
+Generalization). Deriving labels heuristically from parallel text is a standard
+weakly supervised approach when gold labels are inaccessible.
+
+\paragraph{TF-IDF + Logistic Regression.} The first rung of a deliberate
+progression (TF-IDF $\rightarrow$ BERT-base $\rightarrow$ BioBERT) uses
+$(1,2)$-gram TF-IDF features (\texttt{max\_features}${=}50{,}000$) with a
+class-weighted logistic regression to handle the minority Generalization class.
+Understanding what this model can and cannot represent is instructive: rare
+jargon tokens receive high IDF weight, which helps flag Substitution; bigrams
+like ``which is'' signal Explanation; but Generalization is defined by removed
+specificity---an \emph{absence}---which bag-of-words features cannot represent.
+This is precisely why we expect contextual models to help.
+
+\paragraph{Comparison to the literature.} Our three-operation scope
+follows PLABA's original five-operation taxonomy \citep{attal2023plaba},
+covering the 90\% of replacements that are Substitution, Explanation, or
+Generalization rather than the rarer Omission/Exemplification categories
+\citep{ondov2025lessons}. Operation classification is itself known to be
+hard---\citet{ondov2025lessons} report human inter-annotator agreement of
+only 0.46 F1 and baseline classifier scores of $0.33$--$0.39$ macro-F1---
+against which our pseudo-label-trained TF-IDF baseline ($0.424$ macro-F1)
+compares favorably.
+
+\section{Baselines and Preliminary Results}
+\label{sec:metrics}
+
+We evaluate a ladder of simplification baselines and, for the safety
+dimension, implement three preservation metrics from scratch (entity,
+warning, and numerical expression preservation), reusing the detectors
+from Section~\ref{sec:complexity}.
+
+\paragraph{Baseline ladder.} Baseline~1 performs no simplification and
+serves as the safety ceiling: it preserves all warnings by definition.
+Baseline~2 applies rule-based CHV substitution with sentence
+splitting---pure NLP with zero hallucination risk, but with grammatical
+artifacts from context-unaware substitution (e.g., ``is should not be
+used''). Baseline~3 is a direct, unguided LLM prompt (FLAN-T5-base),
+representing the ``simplify everything uniformly'' approach our
+operation-aware system is designed to improve on. We run it locally on
+open weights to keep the baseline fully reproducible.
+
+\paragraph{Preliminary results.} Table~\ref{tab:prelim_results} reports
+SARI, FKGL, compression ratio, and warning preservation on a random
+50-sentence sample of the PLABA validation set. Unguided LLM prompting
+achieves the highest SARI (22.28 vs.\ 16.82 for no simplification) at
+near-neutral compression (0.945), and all three baselines preserve
+warnings perfectly on this random sample---an artifact of sample size,
+since only $33.1\%$ of sentences contain warning language
+(Section~\ref{sec:complexity}) and a 50-sentence random draw may by
+chance contain few or no sentences where a warning is actually dropped.
+
+To test the safety claim directly, we construct a targeted stress test
+restricted to warning-bearing sentences only ($n=30$,
+Table~\ref{tab:stress_test}). Here the pattern changes: unguided LLM
+prompting is the only baseline that drops safety-critical content
+(0.950 preservation, versus 1.000 for both no-simplification and
+rule-based substitution). This discrepancy between the random-sample and
+stress-test results is itself a finding: random-sample evaluation on
+rare-but-critical content is unreliable at small $n$, motivating
+warning-stratified evaluation as standard practice for safety-sensitive
+NLP, not an optional addition.
+
+Taken together with the classifier results, the preliminary picture
+matches our hypothesis: rule-based substitution is safe but limited to
+the $\sim\!43\%$ of edits that are Substitution-type, while unguided LLM
+prompting performs the full range of edits but occasionally sacrifices
+safety-critical content---exactly the failure mode our operation-aware
+router is designed to prevent.
+
+
+\section{Conclusion and Next Steps}
+
+Our preliminary results support the diagnostic framing of this paper:
+random-sample evaluation alone suggests all baselines preserve safety
+equally, but a warning-stratified stress test reveals unguided LLM
+prompting uniquely drops safety-critical content while achieving the
+highest readability--the trade-off our operation-aware system is
+designed to break. Our TF-IDF classifier, despite using pseudo-labels,
+performs within the literature's reported macro-F1 range for this task
+\citep{ondov2025lessons}, with the strongest confusion between
+Substitution and Explanation rather than Explanation and Generalization
+as initially expected, motivating contextual models next.
+
+For the final paper we will add BERT-base and BioBERT classifiers,
+evaluate the full operation-aware generation pipeline against all three
+baselines on the complete test set, extend the safety metrics to entities
+and numerical expressions, and integrate full QuickUMLS lookup. If the
+operation-aware system Pareto-dominates the baselines on the
+readability--safety plane, that is the finding the final paper reports.
+
+\begin{table*}[t]
+  \centering
+  \small
+  \begin{tabular}{lccccc}
+    \toprule
+    \textbf{System} & \textbf{SARI}$\uparrow$ & \textbf{FKGL}$\downarrow$ &
+    \textbf{Compr.} & \textbf{Warn.\ Pres.} & \textbf{Warn.\ Pres.}\textsuperscript{$\dagger$} \\
+     & & & & \textbf{(random, $n$=50)} & \textbf{(stress test, $n$=30)} \\
+    \midrule
+    No simplification    & 16.82 & 15.31 & 1.00  & 1.000 & 1.000 \\
+    Rule-based CHV        & 18.66 & 15.17 & 1.02  & 1.000 & 0.994 \\
+    Direct LLM (FLAN-T5)  & 22.28 & 14.89 & 0.945 & 1.000 & 0.950 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Preliminary results on PLABA validation data. SARI/FKGL/compression
+    from a random 50-sentence sample; warning preservation reported for both
+    the same random sample and a warning-bearing stress test ($n=30$).
+    \textsuperscript{$\dagger$}The stress test isolates the safety failure
+    invisible to random sampling---see Section~\ref{sec:metrics}.}
+  \label{tab:prelim_results}
+\end{table*}
+
+\section{Related Work}
+
+\paragraph{Datasets and prior PLABA systems.}
+PLABA \citep{attal2023plaba} pairs biomedical abstracts with expert
+plain-language rewrites at the sentence level, letting us pseudo-label
+operations rather than treat simplification as opaque sequence-to-sequence
+generation. \citet{knappich2023boschai}'s PLABA-2023-winning BoschAI
+system finds that fine-tuned models copy the input and edit
+little---directly motivating our diagnostic framing, since a model that
+barely edits also barely distinguishes a safe substitution from a
+critical warning. \citet{li2024beemanc} investigate LLMs with
+controllable attributes for the same track, including the BART-based and
+Lay-SciFive systems we plan as neural baselines in the full paper.
+
+\paragraph{TSAR 2025 and the evaluation gap.}
+The winning TSAR 2025 submission \citep{miyata2025ehimenlp} generates
+candidates via 28 model-prompt combinations and reranks by semantic
+similarity; their own ablation shows the gain comes from diversity and
+selection, not from understanding \emph{what kind} of edit a span needs.
+The shared task's own findings \citep{alvamanchego2025tsarfindings} show
+that across 48 submissions from 20 teams, none classified complexity
+type before generating output, and the official metrics (CEFR compliance,
+MeaningBERT similarity) cannot detect a fluent output that quietly drops
+a warning or dosage---the organizers explicitly call for
+expert-in-the-loop validation as future work. Our preservation metrics
+answer this call by making safety a first-class, automatically measurable
+criterion rather than deferring it to expert review.
+
+\paragraph{Jargon detection and style robustness.}
+\citet{papandreou2025jargon} show jargon detectors trained on MedReadMe
+transfer poorly to PLABA (33.71\% entity F1), since the datasets define
+jargon under different annotation objectives---supporting our decision to
+build detectors natively on PLABA. Their jargon-aware LLM prompts also
+introduce factual errors a lookup table structurally cannot produce,
+motivating our CHV-based Substitution pathway over jargon-surfacing
+prompts. \citet{rahman2025spqa} find that stylistic perturbations
+significantly degrade LLM QA correctness and completeness even when
+fluency stays stable, external evidence that surface-level metrics can
+miss real content degradation---the same gap our safety metrics target.
+
+\paragraph{Prior operation-aware simplification.}
+\citet{cripwell2022operation} propose controllable simplification via
+operation classification as a predict-then-execute process, the same
+structural intuition we extend to the biomedical span level.
+\citet{devaraj2021medical} identify safety-critical information loss as a
+recurring failure in paragraph-level medical simplification, directly
+motivating our preservation metrics. \citet{xia2025jebs} introduce JEBS
+on the same five-operation PLABA taxonomy, arguing that separating
+identification, classification, and generation enables more targeted
+evaluation---the diagnose-before-simplify principle underlying our
+pipeline.
+
+\paragraph{Evaluation.}
+SARI \citep{xu2016sari} rewards correct add/keep/delete operations against
+multiple references; BERTScore \citep{zhang2020bertscore} adds contextual
+semantic similarity. Neither captures whether a warning or dosage
+survived, consistent with reports that SARI and FKGL correlate only
+moderately with human judgment \citep{alvamanchego2021unsuitability}---the
+gap our preservation metrics are built to fill.
+
+\section*{Limitations}
+
+Our span-level operation labels are pseudo-labels derived from length and
+edit-distance heuristics, not gold annotations; sentences that
+simultaneously add explanation and remove specificity can be mislabeled
+when length changes cancel. This is consistent with the broader
+difficulty of the task: \citet{ondov2025lessons} report human
+inter-annotator agreement of only 0.46 F1 on operation classification,
+suggesting some divergence between our pseudo-labels and true operation
+categories is an expected property of the task rather than a defect
+specific to our heuristic. Our complexity detectors rely on handcrafted
+patterns and therefore report a lower bound on true complexity, and the
+UMLS matcher currently uses a morphological fallback rather than a full
+UMLS lookup. The warning-preservation metric relies on a curated
+paraphrase map, which encodes annotator assumptions; we plan to replace
+it with embedding-based semantic matching. Finally, preliminary results
+use a small validation sample and a single classifier rung; the
+contextual models and full-corpus evaluation remain future work.
+
+\bibliography{custom}
+
+\end{document}
