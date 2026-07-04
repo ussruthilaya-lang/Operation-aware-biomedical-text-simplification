@@ -1,3 +1,4 @@
 baseline,SARI,FKGL,compression_ratio,warning_preservation
-baseline1_no_simplification,16.532,15.033,1.0,1.0
-baseline2_rule_based_chv,19.306,14.344,1.011,1.0
+baseline1_no_simplification,16.82,15.314,1.0,1.0
+baseline2_rule_based_chv,18.662,15.169,1.015,1.0
+baseline3_direct_llm,22.282,14.885,0.945,1.0

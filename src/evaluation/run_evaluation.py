@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
 
 from src.baselines.baseline1_no_simplification import simplify as b1_simplify
 from src.baselines.baseline2_rule_based_chv import simplify as b2_simplify
+from src.baselines.baseline3_direct_llm import simplify as b3_simplify
 from src.evaluation.metrics import (
     compute_corpus_sari,
     compute_fkgl,
@@ -30,23 +31,24 @@ VAL_PATH = 'data/plaba/val.csv'
 OUT_PATH = 'results/prelim_evaluation.csv'
 
 
+# In run_evaluation.py, replace load_val_sample() with:
+
+from src.data.pseudo_labeler import build_pairs_from_plaba_json, _DEFAULT_JSON, _VAL_CSV
+
 def load_val_sample():
     """
-    Group val rows by input_text so multiple Adaptation_Versions become
-    a reference list. Then take a fixed-seed random sample of SAMPLE_SIZE
-    unique sources.
+    Build sentence-level val pairs from data.json (not val.csv's abstract-level
+    input_text), restricted to val PMIDs, then sample SAMPLE_SIZE.
     """
-    df = pd.read_csv(VAL_PATH)
-    grouped = (
-        df.groupby('input_text')['target_text']
-          .apply(list)
-          .reset_index()
-    )
+    val_pmids = set(str(p) for p in pd.read_csv(_VAL_CSV)['pmid'].unique())
+    df = build_pairs_from_plaba_json(_DEFAULT_JSON)
+    df = df[df['pmid'].astype(str).isin(val_pmids)].reset_index(drop=True)
+
+    # Group by source sentence to collect multiple adaptation references
+    grouped = df.groupby('source')['target'].apply(list).reset_index()
     n = min(SAMPLE_SIZE, len(grouped))
     sample = grouped.sample(n=n, random_state=RANDOM_SEED).reset_index(drop=True)
-    sources = sample['input_text'].tolist()
-    references_list = sample['target_text'].tolist()
-    return sources, references_list
+    return sample['source'].tolist(), sample['target'].tolist()
 
 
 def evaluate_baseline(name, simplify_fn, sources, references_list):
@@ -84,6 +86,7 @@ def main():
     for name, fn in [
         ('baseline1_no_simplification', b1_simplify),
         ('baseline2_rule_based_chv', b2_simplify),
+        ('baseline3_direct_llm', b3_simplify),
     ]:
         print(f"Running {name}...")
         row = evaluate_baseline(name, fn, sources, references_list)
