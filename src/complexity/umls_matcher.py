@@ -178,7 +178,7 @@ class QuickUMLSStrategy:
         self.index_path = index_path or QUICKUMLS_INDEX_PATH
         self.matcher = QuickUMLS(
             self.index_path,
-            accepted_semtypes=self.RELEVANT_SEMTYPES
+            accepted_semtypes=self.RELEVANT_SEMTYPES,
             threshold=0.85  # stricter than default 0.7 — cuts weak/loose matches
         )
 
