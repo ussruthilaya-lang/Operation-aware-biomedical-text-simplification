@@ -33,7 +33,12 @@ COMMON_ENGLISH_TERMS = {
     'infection', 'inflammation', 'surgery', 'treatment', 'drug',
     'medicine', 'dose', 'patient', 'doctor', 'hospital', 'clinic',
     'symptoms', 'diagnosis', 'therapy', 'recovery', 'disease',
-    'vitamin', 'protein', 'fat', 'sugar', 'salt', 'water', 'oxygen'
+    'vitamin', 'protein', 'fat', 'sugar', 'salt', 'water', 'oxygen',
+    # Added: general clinical/administrative vocabulary that happens to
+    # exist as formal UMLS concepts but is already plain English —
+    # false positives caught during QuickUMLS integration testing.
+    'adverse effects', 'side effects', 'primary', 'performed',
+    'secondary', 'chronic', 'acute',
 }
 
 # Biomedical jargon patterns — terms almost never in common English
@@ -174,6 +179,7 @@ class QuickUMLSStrategy:
         self.matcher = QuickUMLS(
             self.index_path,
             accepted_semtypes=self.RELEVANT_SEMTYPES
+            threshold=0.85  # stricter than default 0.7 — cuts weak/loose matches
         )
 
     def match(self, text):
