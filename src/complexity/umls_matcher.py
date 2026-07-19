@@ -64,21 +64,23 @@ except ImportError:
 def _quickumls_match(text, matcher):
     """Full UMLS lookup when QuickUMLS is available."""
     matches = matcher.match(text, best_match=True, ignore_syntax=False)
-    results = []
+    seen_spans = {}
     for match_group in matches:
-        for match in match_group:
-            term = match['ngram']
-            # Only flag if not in common English
-            if term.lower() not in COMMON_ENGLISH_TERMS:
-                results.append({
-                    'term': term,
-                    'cui': match['cui'],
-                    'similarity': match['similarity'],
-                    'start': match['start'],
-                    'end': match['end'],
-                    'source': 'quickumls'
-                })
-    return results
+        # Each match_group is a list of candidate matches for one span;
+        # keep only the highest-similarity candidate, not all of them.
+        best = max(match_group, key=lambda m: m['similarity'])
+        term = best['ngram']
+        if term.lower() not in COMMON_ENGLISH_TERMS:
+            span_key = (best['start'], best['end'])
+            seen_spans[span_key] = {
+                'term': term,
+                'cui': best['cui'],
+                'similarity': best['similarity'],
+                'start': best['start'],
+                'end': best['end'],
+                'source': 'quickumls'
+            }
+    return list(seen_spans.values())
 
 
 def _heuristic_match(text):
@@ -152,6 +154,16 @@ class QuickUMLSStrategy:
     (see QuickUMLS setup docs). Point `index_path` at wherever that
     index lives on the machine running the pipeline.
     """
+    RELEVANT_SEMTYPES = {
+        'T047',  # Disease or Syndrome
+        'T191',  # Neoplastic Process
+        'T037',  # Injury or Poisoning
+        'T121',  # Pharmacologic Substance
+        'T061',  # Therapeutic or Preventive Procedure
+        'T060',  # Diagnostic Procedure
+        'T184',  # Sign or Symptom
+        'T046',  # Pathologic Function
+    }
 
     def __init__(self, index_path=None):
         if not QUICKUMLS_AVAILABLE:
@@ -159,7 +171,10 @@ class QuickUMLSStrategy:
                 "quickumls is not installed. Install it or use UMLS_BACKEND=morphological."
             )
         self.index_path = index_path or QUICKUMLS_INDEX_PATH
-        self.matcher = QuickUMLS(self.index_path)
+        self.matcher = QuickUMLS(
+            self.index_path,
+            accepted_semtypes=self.RELEVANT_SEMTYPES
+        )
 
     def match(self, text):
         return _quickumls_match(text, self.matcher)
