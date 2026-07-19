@@ -16,6 +16,9 @@ Output: results/complexity_cooccurrence_{backend}.csv
 
 import os
 import sys
+import json
+import subprocess
+import tempfile
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
@@ -24,7 +27,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
 from src.data.pseudo_labeler import (
     build_pairs_from_plaba_json, _DEFAULT_JSON, _VAL_CSV, _TEST_CSV
 )
-from src.complexity.ner_detector import flag_sentence as flag_ner
 from src.complexity.warning_lexicon import flag_sentence as flag_warning
 from src.complexity.syntactic_depth import flag_sentence as flag_syntactic
 from src.complexity.numerical_extractor import flag_sentence as flag_numerical
@@ -34,6 +36,43 @@ from src.complexity.umls_matcher import (
 )
 
 OUT_PATH = f"results/complexity_cooccurrence_{UMLS_BACKEND}.csv"
+
+NER_ENV_PYTHON = os.path.expanduser("~/miniconda3/envs/ner_env/bin/python")
+NER_RUNNER_SCRIPT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "complexity", "ner_runner_subprocess.py"
+)
+
+
+def run_ner_batch(all_sentences):
+    """
+    Runs NER flagging for ALL sentences in one subprocess call (not per-sentence,
+    not per-abstract) — avoids paying Python/spaCy startup cost hundreds of times.
+
+    Returns: dict {sentence: bool} for O(1) lookup during per-abstract aggregation.
+    """
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f_in:
+        json.dump({"sentences": all_sentences}, f_in)
+        input_path = f_in.name
+
+    output_path = input_path.replace('.json', '_out.json')
+
+    print(f"  calling ner_env subprocess for {len(all_sentences)} sentences...")
+    result = subprocess.run(
+        [NER_ENV_PYTHON, NER_RUNNER_SCRIPT, input_path, output_path],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        print("NER subprocess failed:", result.stderr)
+        raise RuntimeError("ner_runner_subprocess.py failed")
+
+    with open(output_path) as f_out:
+        flags = json.load(f_out)["flags"]
+
+    os.unlink(input_path)
+    os.unlink(output_path)
+
+    return dict(zip(all_sentences, flags))
 
 
 def load_training_abstracts():
@@ -70,18 +109,17 @@ def get_umls_matcher():
     return None
 
 
-def analyze_abstracts(abstracts, umls_matcher):
+def analyze_abstracts(abstracts, umls_matcher, ner_flags):
     """
-    Runs all 5 detectors per abstract (flagged if ANY sentence in the
-    abstract triggers that detector). Returns a DataFrame, one row per
-    abstract, one bool column per detector.
+    Runs 4 detectors live per-sentence, uses pre-computed ner_flags (dict)
+    for NER since that runs in a separate subprocess/environment.
     """
     rows = []
     for pmid, sentences in abstracts.items():
         row = {
             'pmid': pmid,
             'n_sentences': len(sentences),
-            'ner': any(flag_ner(s) for s in sentences),
+            'ner': any(ner_flags[s] for s in sentences),
             'warning': any(flag_warning(s) for s in sentences),
             'syntactic': any(flag_syntactic(s) for s in sentences),
             'numerical': any(flag_numerical(s) for s in sentences),
@@ -126,8 +164,12 @@ def main():
     umls_matcher = get_umls_matcher()
     print(f"  matcher: {'QuickUMLS instance' if umls_matcher else 'None (using heuristic fallback)'}")
 
-    print("\nRunning all 5 detectors over each abstract...")
-    df = analyze_abstracts(abstracts, umls_matcher)
+    print("\nRunning NER via subprocess (ner_env)...")
+    all_sentences = [s for sents in abstracts.values() for s in sents]
+    ner_flags = run_ner_batch(all_sentences)
+
+    print("\nRunning remaining detectors over each abstract...")
+    df = analyze_abstracts(abstracts, umls_matcher, ner_flags)
 
     print_summary(df)
 
