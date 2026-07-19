@@ -14,6 +14,16 @@
 # Architecture note: QuickUMLS requires a local UMLS installation (~35GB).
 # Interface is fully implemented; UMLS data integration for final submission.
 
+import os
+
+# UMLS_BACKEND selects the matching strategy without touching code:
+#   morphological (default) — suffix/pattern heuristics, no external data
+#   quickumls               — real UMLS lookup via a local QuickUMLS index
+UMLS_BACKEND = os.environ.get("UMLS_BACKEND", "morphological").lower()
+QUICKUMLS_INDEX_PATH = os.environ.get(
+    "QUICKUMLS_INDEX_PATH", os.path.expanduser("~/umls_index")
+)
+
 # Common English vocabulary — terms that don't need simplification
 # even if they appear in UMLS
 COMMON_ENGLISH_TERMS = {
@@ -128,6 +138,41 @@ def _heuristic_match(text):
     return results
 
 
+class MorphologicalStrategy:
+    """Default backend — suffix/pattern heuristics, no external data required."""
+
+    def match(self, text):
+        return _heuristic_match(text)
+
+
+class QuickUMLSStrategy:
+    """Real UMLS lookup via a local QuickUMLS index.
+
+    Requires the `quickumls` package and a local UMLS installation
+    (see QuickUMLS setup docs). Point `index_path` at wherever that
+    index lives on the machine running the pipeline.
+    """
+
+    def __init__(self, index_path=None):
+        if not QUICKUMLS_AVAILABLE:
+            raise ImportError(
+                "quickumls is not installed. Install it or use UMLS_BACKEND=morphological."
+            )
+        self.index_path = index_path or QUICKUMLS_INDEX_PATH
+        self.matcher = QuickUMLS(self.index_path)
+
+    def match(self, text):
+        return _quickumls_match(text, self.matcher)
+
+
+def get_strategy(backend=None):
+    """Factory: returns the matching strategy selected by UMLS_BACKEND."""
+    backend = (backend or UMLS_BACKEND).lower()
+    if backend == "quickumls":
+        return QuickUMLSStrategy()
+    return MorphologicalStrategy()
+
+
 def detect_umls_terms(text, matcher=None):
     """
     Detects medical jargon terms not in common English vocabulary.
@@ -167,12 +212,15 @@ if __name__ == "__main__":
         "The patient developed deep vein thrombosis post-surgery.",
         "Angioplasty was performed to treat coronary stenosis.",
     ]
+
+    strategy = get_strategy()
+    print(f"UMLS_BACKEND: {UMLS_BACKEND}")
     print(f"QuickUMLS available: {QUICKUMLS_AVAILABLE}")
-    print(f"Mode: {'Full UMLS lookup' if QUICKUMLS_AVAILABLE else 'Heuristic fallback'}\n")
+    print(f"Using: {type(strategy).__name__}\n")
 
     for s in test_sentences:
-        terms = detect_umls_terms(s)
+        terms = strategy.match(s)
         print(f"Sentence: {s}")
-        print(f"Flagged: {flag_sentence(s)}")
+        print(f"Flagged: {len(terms) > 0}")
         print(f"Terms: {[t['term'] for t in terms]}")
         print()
