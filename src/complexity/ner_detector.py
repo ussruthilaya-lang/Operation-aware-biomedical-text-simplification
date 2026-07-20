@@ -13,7 +13,8 @@ def load_model():
     """Lazy load — only load once, reuse across calls."""
     global nlp
     if nlp is None:
-        nlp = spacy.load('en_ner_bc5cdr_md')
+        import en_ner_bc5cdr_md
+        nlp = en_ner_bc5cdr_md.load()
     return nlp
 
 def detect_biomedical_entities(text):
