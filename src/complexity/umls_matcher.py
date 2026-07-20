@@ -65,17 +65,22 @@ try:
 except ImportError:
     QUICKUMLS_AVAILABLE = False
 
-# Broad common-English wordlist (~236k words) to catch cases where a UMLS
-# concept's preferred term coincidentally matches an ordinary English word
-# (e.g., "control" is also a real chemical/substance CUI in UMLS at
-# similarity 1.0 — no semtype restriction can filter this out, since T121
-# is a category we genuinely need for real drug names like "sorafenib").
-try:
-    import nltk
-    from nltk.corpus import words as _nltk_words
-    _COMMON_ENGLISH_WORDLIST = set(w.lower() for w in _nltk_words.words())
-except (ImportError, LookupError):
-    _COMMON_ENGLISH_WORDLIST = set()
+# Frequency-based common-English filter. NLTK's `words` corpus was tried
+# first but proved too broad — it includes real medical terms like
+# "hyperglycemia" as valid English words, incorrectly filtering out
+# genuine jargon. wordfreq's frequency scores let us set a principled
+# cutoff: words common enough that a lay reader would recognize them,
+# rather than "exists in any dictionary."
+from wordfreq import zipf_frequency
+
+# Zipf frequency scale: ~7 = extremely common ("the", "is"),
+# ~3 = uncommon. 3.0 cutoff empirically separates everyday words
+# ("control", "determine") from clinical jargon ("hyperglycemia",
+# "nephrotoxicity") — see bug log for validation examples.
+COMMON_WORD_ZIPF_THRESHOLD = 3.0
+
+def _is_common_english_word(word):
+    return zipf_frequency(word.lower(), 'en') >= COMMON_WORD_ZIPF_THRESHOLD
 
 
 def _quickumls_match(text, matcher):
@@ -90,7 +95,7 @@ def _quickumls_match(text, matcher):
         term_lower = term.lower()
         is_common = (
             term_lower in COMMON_ENGLISH_TERMS
-            or (len(term.split()) == 1 and term_lower in _COMMON_ENGLISH_WORDLIST)
+            or (len(term.split()) == 1 and _is_common_english_word(term))
         )
         if not is_common:
             span_key = (best['start'], best['end'])
