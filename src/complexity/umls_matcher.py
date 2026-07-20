@@ -74,10 +74,10 @@ except ImportError:
 from wordfreq import zipf_frequency
 
 # Zipf frequency scale: ~7 = extremely common ("the", "is"),
-# ~3 = uncommon. 3.0 cutoff empirically separates everyday words
+# ~3 = uncommon. 3.8 cutoff empirically separates everyday words
 # ("control", "determine") from clinical jargon ("hyperglycemia",
 # "nephrotoxicity") — see bug log for validation examples.
-COMMON_WORD_ZIPF_THRESHOLD = 3.0
+COMMON_WORD_ZIPF_THRESHOLD = 3.8
 
 def _is_common_english_word(word):
     return zipf_frequency(word.lower(), 'en') >= COMMON_WORD_ZIPF_THRESHOLD
