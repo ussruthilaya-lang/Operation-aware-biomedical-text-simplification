@@ -33,6 +33,16 @@ WARNING_CUES = {
     ]
 }
 
+NEGATION_CUES = ["no ", "not ", "without ", "absence of ", "free of ", "never "]
+NEGATION_WINDOW = 15  # characters to look back from the match start
+
+def _is_negated(text, match_start):
+    """Check if a negation cue appears shortly before the matched phrase."""
+    window_start = max(0, match_start - NEGATION_WINDOW)
+    preceding_text = text[window_start:match_start].lower()
+    return any(cue in preceding_text for cue in NEGATION_CUES)
+
+
 def detect_warnings(text):
     """
     Detects safety-critical warning language in biomedical text.
@@ -54,12 +64,13 @@ def detect_warnings(text):
                 idx = text_lower.find(phrase, start)
                 if idx == -1:
                     break
-                results.append({
-                    'match': text[idx:idx + len(phrase)],
-                    'category': category,
-                    'start': idx,
-                    'end': idx + len(phrase)
-                })
+                if not _is_negated(text, idx):
+                    results.append({
+                        'match': text[idx:idx + len(phrase)],
+                        'category': category,
+                        'start': idx,
+                        'end': idx + len(phrase)
+                    })
                 start = idx + 1
 
     # Sort by position in text
