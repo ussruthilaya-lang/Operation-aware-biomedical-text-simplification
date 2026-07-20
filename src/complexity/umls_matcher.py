@@ -73,10 +73,11 @@ except ImportError:
 # rather than "exists in any dictionary."
 from wordfreq import zipf_frequency
 
-# Zipf frequency scale: ~7 = extremely common ("the", "is"),
-# ~3 = uncommon. 3.8 cutoff empirically separates everyday words
-# ("control", "determine") from clinical jargon ("hyperglycemia",
-# "nephrotoxicity") — see bug log for validation examples.
+# Zipf frequency scale: ~7 = extremely common ("the"), ~1-2 = rare/technical.
+# Threshold validated against 16 known common/jargon words — cleanly
+# separates common English (determine=4.63, control=5.40, disease=4.90)
+# from genuine biomedical jargon (carcinoma=3.15, hyperglycemia=2.31,
+# sorafenib=1.43). See bug log for validation data.
 COMMON_WORD_ZIPF_THRESHOLD = 3.8
 
 def _is_common_english_word(word):
