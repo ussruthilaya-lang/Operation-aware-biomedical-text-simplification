@@ -1,4 +1,3 @@
-cat > ~/setup_ner_env.sh << 'SCRIPT_END'
 #!/bin/bash
 set -e  # stop immediately on any failure
 
@@ -34,6 +33,3 @@ print('NER environment OK:', [(e.text, e.label_) for e in doc.ents])
 "
 
 echo "=== Done. Use via: source ~/miniconda3/bin/activate ner_env ==="
-SCRIPT_END
-
-chmod +x ~/setup_ner_env.sh
