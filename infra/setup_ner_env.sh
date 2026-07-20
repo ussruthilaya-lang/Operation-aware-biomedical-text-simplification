@@ -21,7 +21,7 @@ conda create -n ner_env python=3.9 -y
 echo "=== Step 5: Install scispaCy + BC5CDR model inside ner_env ==="
 NER_PIP="$HOME/miniconda3/envs/ner_env/bin/pip"
 NER_PYTHON="$HOME/miniconda3/envs/ner_env/bin/python"
-"$NER_PIP" install scispacy
+"$NER_PIP" install scispacy==0.5.4
 "$NER_PIP" install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_ner_bc5cdr_md-0.5.4.tar.gz
 
 echo "=== Step 6: Verify ==="
