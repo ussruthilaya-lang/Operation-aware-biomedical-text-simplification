@@ -26,8 +26,8 @@ NER_PYTHON="$HOME/miniconda3/envs/ner_env/bin/python"
 
 echo "=== Step 6: Verify ==="
 "$NER_PYTHON" -c "
-import spacy
-nlp = spacy.load('en_ner_bc5cdr_md')
+import en_ner_bc5cdr_md
+nlp = en_ner_bc5cdr_md.load()
 doc = nlp('Patients with hepatocellular carcinoma received sorafenib.')
 assert len(doc.ents) > 0, 'No entities detected — install may be broken'
 print('NER environment OK:', [(e.text, e.label_) for e in doc.ents])

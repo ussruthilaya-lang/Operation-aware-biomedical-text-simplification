@@ -29,8 +29,8 @@ def main():
 
     # Import here, not at module level — this script only runs inside ner_env,
     # so scispacy/spacy are guaranteed available in that interpreter.
-    import spacy
-    nlp = spacy.load("en_ner_bc5cdr_md")
+    import en_ner_bc5cdr_md
+    nlp = en_ner_bc5cdr_md.load()
 
     flags = []
     for sent in sentences:
