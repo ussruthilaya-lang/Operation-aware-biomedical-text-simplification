@@ -19,12 +19,13 @@ echo "=== Step 4: Create ner_env (Python 3.9 — needed for prebuilt blis/spaCy 
 conda create -n ner_env python=3.9 -y
 
 echo "=== Step 5: Install scispaCy + BC5CDR model inside ner_env ==="
-source "$HOME/miniconda3/bin/activate" ner_env
-pip install scispacy
-pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_ner_bc5cdr_md-0.5.4.tar.gz
+NER_PIP="$HOME/miniconda3/envs/ner_env/bin/pip"
+NER_PYTHON="$HOME/miniconda3/envs/ner_env/bin/python"
+"$NER_PIP" install scispacy
+"$NER_PIP" install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_ner_bc5cdr_md-0.5.4.tar.gz
 
 echo "=== Step 6: Verify ==="
-python -c "
+"$NER_PYTHON" -c "
 import spacy
 nlp = spacy.load('en_ner_bc5cdr_md')
 doc = nlp('Patients with hepatocellular carcinoma received sorafenib.')
