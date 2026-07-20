@@ -65,6 +65,18 @@ try:
 except ImportError:
     QUICKUMLS_AVAILABLE = False
 
+# Broad common-English wordlist (~236k words) to catch cases where a UMLS
+# concept's preferred term coincidentally matches an ordinary English word
+# (e.g., "control" is also a real chemical/substance CUI in UMLS at
+# similarity 1.0 — no semtype restriction can filter this out, since T121
+# is a category we genuinely need for real drug names like "sorafenib").
+try:
+    import nltk
+    from nltk.corpus import words as _nltk_words
+    _COMMON_ENGLISH_WORDLIST = set(w.lower() for w in _nltk_words.words())
+except (ImportError, LookupError):
+    _COMMON_ENGLISH_WORDLIST = set()
+
 
 def _quickumls_match(text, matcher):
     """Full UMLS lookup when QuickUMLS is available."""
@@ -75,7 +87,12 @@ def _quickumls_match(text, matcher):
         # keep only the highest-similarity candidate, not all of them.
         best = max(match_group, key=lambda m: m['similarity'])
         term = best['ngram']
-        if term.lower() not in COMMON_ENGLISH_TERMS:
+        term_lower = term.lower()
+        is_common = (
+            term_lower in COMMON_ENGLISH_TERMS
+            or (len(term.split()) == 1 and term_lower in _COMMON_ENGLISH_WORDLIST)
+        )
+        if not is_common:
             span_key = (best['start'], best['end'])
             seen_spans[span_key] = {
                 'term': term,
