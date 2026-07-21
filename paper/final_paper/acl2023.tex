@@ -1,0 +1,286 @@
+% This must be in the first 5 lines to tell arXiv to use pdfLaTeX.
+\pdfoutput=1
+
+\documentclass[11pt]{article}
+
+% Remove the "review" option to generate the final version.
+\usepackage[review]{ACL2023}
+
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{booktabs}
+\usepackage{graphicx}
+
+\title{Diagnose Before Simplifying: Operation-Aware Biomedical Text Simplification}
+
+% TODO: fill in real author list / affiliations before submission
+\author{
+  Sruthilaya \and Rishabh \and Sophakotra \and Zihao \\
+  Northeastern University \\
+  \texttt{email@domain}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+% TODO (team): 3-5 sentence summary. Draft below covers Sruthilaya's
+% contribution; extend with classifier/generation results once available.
+Biomedical text simplification systems typically apply a single, undifferentiated
+simplification strategy to all text, regardless of what kind of complexity a given
+span actually exhibits. We argue that classifying the \emph{operation} a span
+requires -- Substitution, Explanation, or Generalization -- before generation
+produces safer and more capable simplification than unguided end-to-end approaches.
+We show that rule-based simplification tools exhibit a substantial coverage gap:
+they cannot perform Explanation or Generalization operations at all, only
+Substitution. We introduce a multi-signal complexity detection framework spanning
+lexical, syntactic, numerical, and safety-critical dimensions, grounded in a
+validated real-UMLS terminology lookup achieving complete jargon coverage on our
+training set (100.0\%, vs. 86.8\% for a morphological heuristic baseline). We
+further show that safety evaluation for simplification systems requires
+warning-stratified sampling, not random sampling, to reliably detect rare but
+safety-critical failures.
+\end{abstract}
+
+\section{Introduction}
+% TODO (team): high-level framing, prior work context, contributions list.
+% Suggested flow:
+%  - Biomedical text is written for clinicians, not patients (cite PLABA motivation)
+%  - Prior simplification work treats "simplify" as one operation; PLABA's own
+%    taxonomy (Substitution/Explanation/Generalization/Omission/Exemplification)
+%    shows this is wrong
+%  - Our contribution: (1) operation-aware framing, (2) multi-signal complexity
+%    detection incl. validated real-UMLS lookup, (3) stratified safety evaluation
+%    methodology, (4) empirical coverage-gap quantification
+Patient-facing biomedical text -- research abstracts, clinical notes, drug
+labeling -- is frequently written at a reading and vocabulary level that assumes
+clinical training the intended reader does not have. Automated simplification
+systems aim to close this gap, but most treat simplification as a single,
+undifferentiated transformation applied uniformly across a text. We argue this is
+the wrong framing: different spans of biomedical text require fundamentally
+different \emph{kinds} of simplification, and diagnosing which kind is needed
+before generating output is itself the key missing step in prior work.
+
+% TODO (team): insert contributions list, e.g.:
+% Our contributions are: (1) ...; (2) ...; (3) ...; (4) ...
+
+\section{The Problem}
+% TODO (team): motivate why this is interesting/important beyond "simplification is nice"
+% Suggested content: coverage gap statistic, safety stakes of getting it wrong
+% (dropped contraindication vs. dropped adjective), PLABA operation distribution
+% from Ondov et al. 2025 as evidence operations are not interchangeable.
+
+\section{Main Idea}
+% TODO (team): overall operation-aware architecture description belongs here
+% (Sophakotra's classifier + generation routing). Sruthilaya's complexity
+% detection framework and QuickUMLS integration below are the diagnostic
+% front-end that motivates and feeds this routing decision.
+
+\subsection{Complexity Detection Framework}
+\label{sec:complexity-detection}
+
+Before a biomedical sentence can be simplified, the system must first determine
+\emph{what kind} of complexity it exhibits. We argue that biomedical text
+complexity is not a single dimension but a composite of at least four distinct
+signals, each requiring a different detection paradigm:
+
+\begin{itemize}
+    \item \textbf{Numerical expressions} (dosages, risk ratios, $p$-values,
+    confidence intervals), detected via regular expressions. These patterns are
+    finite and rule-governed, so no learned model is needed to achieve full
+    recall on known formats.
+    \item \textbf{Safety-critical warning language} (contraindications, adverse
+    effects, risk alerts), detected via a hand-built lexicon. Because these
+    phrases are clinically standardized, a lexicon gives full auditability and
+    zero hallucination risk compared to a learned classifier.
+    \item \textbf{Named biomedical entities} (diseases, chemicals), detected via
+    a supervised NER model (SciSpaCy, BC5CDR-trained; \citealp{Neumann2019}).
+    General-domain NER models miss domain-specific entities such as
+    \emph{nephrotoxicity}; biomedical pretraining is not optional for this
+    signal.
+    \item \textbf{Structural complexity}, detected via dependency parse depth
+    rather than raw sentence length. Length alone unfairly penalizes
+    long-but-simple sentences (e.g., coordinated lists of facts), whereas parse
+    depth captures genuine syntactic nesting that a vocabulary-only view misses
+    entirely.
+    \item \textbf{Medical jargon}, detected via UMLS concept matching
+    (Section~\ref{sec:quickumls}). A term is treated as jargon if it exists in
+    UMLS as a formal concept but is not part of common English vocabulary.
+\end{itemize}
+
+No single paradigm captures all five signals: regular expressions catch numbers
+but miss entities; a lexicon catches warnings but misses syntactic structure; NER
+catches entities but misses jargon that is not a named entity in the BC5CDR sense
+(e.g., procedure names, qualifiers). We treat this as the central architectural
+argument motivating a multi-detector design rather than a single end-to-end
+classifier.
+
+\subsection{QuickUMLS Integration}
+\label{sec:quickumls}
+
+Our jargon detector is built on the Unified Medical Language System (UMLS), a
+meta-thesaurus unifying over 200 source vocabularies (SNOMED CT, MeSH, RxNorm,
+and others) into a single concept space of several million entries. We use
+QuickUMLS \citep{Soldaini2016}, which maps free text to UMLS concept identifiers
+via approximate string matching, to perform this lookup at the sentence level.
+
+\paragraph{Definition of jargon.} A term is flagged as jargon if it resolves to a
+UMLS concept \emph{and} is not part of common English vocabulary, operationalized
+via three filters layered on top of raw QuickUMLS output:
+
+\begin{enumerate}
+    \item \textbf{Semantic type restriction.} UMLS concepts are tagged with one
+    or more of 127+ semantic types. We restrict matches to eight clinically
+    relevant types (e.g., \textit{Disease or Syndrome}, \textit{Pharmacologic
+    Substance}, \textit{Therapeutic or Preventive Procedure}), excluding generic
+    administrative or qualifier concepts that are technically present in UMLS
+    but are already plain English (e.g., \textit{primary}, \textit{performed}).
+    \item \textbf{Similarity threshold.} We require a QuickUMLS similarity score
+    of at least 0.85, filtering out loose or uncertain string matches.
+    \item \textbf{Lexical frequency filter.} Semantic-type restriction alone is
+    insufficient: some common English words coincidentally match real,
+    clinically-relevant UMLS concepts. For example, \emph{control} matches a
+    genuine pharmacologic-substance concept at similarity 1.0 -- the same
+    semantic type needed to correctly catch real drug names such as
+    \emph{sorafenib}. We therefore apply a word-frequency filter using Zipf
+    frequency scores \citep{wordfreq}, requiring single-word matches to fall
+    below a threshold of 3.8 to be treated as jargon. This threshold was
+    validated against a held-out set of 16 known common and jargon terms,
+    cleanly separating common words (\emph{control}: 5.40, \emph{determine}:
+    4.63, \emph{disease}: 4.90) from genuine jargon (\emph{carcinoma}: 3.15,
+    \emph{hyperglycemia}: 2.31, \emph{sorafenib}: 1.43). A preliminary attempt
+    using a broad English wordlist (NLTK's \texttt{words} corpus) was rejected:
+    it classified genuine jargon such as \emph{hyperglycemia} as ordinary
+    English, since raw dictionary membership does not capture actual usage
+    frequency.
+\end{enumerate}
+
+Additionally, since QuickUMLS returns every candidate concept considered for a
+matched span rather than a single best match, we deduplicate by retaining only
+the highest-similarity candidate per span.
+
+\section{Details, Evaluation, and Results}
+% TODO (team): classifier results (Sophakotra), full-corpus eval (Zihao),
+% readability-vs-safety scatter plot (Rishabh) go here alongside the
+% subsections below.
+
+\subsection{Safety Evaluation Methodology}
+\label{sec:safety-eval}
+
+We measure whether a simplification system preserves safety-critical content
+(contraindications, adverse effect warnings) using a warning-preservation metric
+with paraphrase matching, rather than surface $n$-gram overlap metrics such as
+ROUGE. ROUGE cannot distinguish between a system that preserves a warning and one
+that silently drops it, provided the rest of the sentence is scored favorably;
+our metric targets exactly this failure mode.
+
+A central methodological finding from our evaluation is that \textbf{random
+sampling is statistically underpowered to detect rare safety failures}.
+Warning-bearing sentences occur at a base rate of approximately 33\% in our data;
+a random sample of 50 sentences showed all baseline systems achieving perfect
+warning preservation, a misleadingly optimistic result. Only a
+\emph{stratified} stress test -- restricted to warning-bearing sentences
+specifically -- revealed that unguided LLM-based simplification is the only
+baseline that drops safety-critical content under evaluation. We treat
+stratified, targeted evaluation as a required methodological component for
+safety-critical NLP systems generally, not specific to this dataset.
+
+\subsection{Complexity Coverage Results}
+\label{sec:complexity-results}
+
+Table~\ref{tab:complexity-coverage} reports detector flag rates across our
+verified training split ($n=530$ abstracts\footnote{We note a discrepancy
+between this figure and an earlier internal estimate of $n=635$; the current
+figure was independently re-derived via two methods (direct exclusion of
+validation/test PMIDs from the source data, and the shipped train/validation/test
+split file) which agree with each other. We report the verified, reproducible
+number here.}), comparing our real UMLS-based jargon detector against a
+morphological (suffix-pattern) fallback baseline.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Detector} & \textbf{Morph.} & \textbf{UMLS} \\
+\midrule
+NER              & --    & 98.7\% \\
+Warning cues      & --    & 32.1\% \\
+Syntactic depth   & 94.0\% & 94.0\% \\
+Numerical exprs.  & --    & 60.2\% \\
+Jargon (UMLS)     & 86.8\% & \textbf{100.0\%} \\
+\midrule
+3+ detectors firing & 90.8\% & 98.1\% \\
+\bottomrule
+\end{tabular}
+\caption{Detector flag rates by abstract ($n=530$). ``Morph.'' denotes a
+suffix/pattern heuristic fallback used when a full UMLS installation is
+unavailable; ``UMLS'' denotes the full QuickUMLS pipeline described in
+Section~\ref{sec:quickumls}.}
+\label{tab:complexity-coverage}
+\end{table}
+
+The real UMLS pipeline achieves complete (100.0\%) jargon coverage across the
+training set, compared to 86.8\% under the morphological fallback -- a direct,
+quantified demonstration of the coverage gap between rule-based jargon detection
+and true terminology-base lookup. We validated this result in two stages: first
+against a small set of targeted test sentences containing known jargon (e.g.,
+\emph{hepatocellular carcinoma}, \emph{sorafenib}, \emph{nephrotoxicity}), and
+second via manual review of a random sample of ten training abstracts, confirming
+that flagged terms were genuine clinical terminology (e.g., \emph{implantable
+cardioverter-defibrillator}, \emph{hyporeninemic hypoaldosteronism},
+\emph{gabapentinoids}) rather than residual false positives.
+
+Consistent with our preliminary findings, the majority of abstracts exhibit
+multiple simultaneous complexity signals: 98.1\% of abstracts trigger three or
+more of our five detectors under the full UMLS pipeline, reinforcing that
+biomedical text complexity is multi-dimensional and that a single-signal
+detector would systematically under-detect the true complexity profile of this
+domain.
+
+\section{Related Work}
+% TODO (team): condense literature review to fit page budget. Suggested set:
+\begin{itemize}
+    \item \citet{Ondov2025} -- PLABA track creators' own reflection; source of
+    the correct 3-operation taxonomy scope and an external classifier benchmark.
+    \item \citet{Attal2023} -- original PLABA dataset and operation taxonomy.
+    \item Alva-Manchego et al. 2025 -- TSAR shared task findings; no prior
+    system classifies complexity type before generating.
+    \item \citet{Neumann2019} -- SciSpaCy, justifies biomedical NER pretraining.
+    \item Miyata et al. 2025 -- EhiMeNLP; shows generate-then-rerank gains come
+    from diversity/selection, not operation understanding, motivating our
+    diagnostic framing.
+\end{itemize}
+
+\section{Conclusion and Future Work}
+% TODO (team): summarize contributions, point to classifier upgrade path
+% (TF-IDF+LR -> BERT -> BioBERT), entity/numerical preservation metrics,
+% human evaluation.
+
+\section*{Limitations}
+Our jargon detection pipeline, while substantially more complete than a
+morphological baseline, retains residual imprecision at the phrase level:
+multi-word spans (e.g., \emph{urine output}) are not subject to our single-word
+frequency filter and can be flagged despite being largely comprehensible to a lay
+reader. We view this as an acceptable trade-off given diminishing returns on
+further manual filtering, but note it explicitly rather than presenting our
+jargon coverage figure as free of false positives. Our warning-preservation
+metric's paraphrase map encodes annotator assumptions about semantic equivalence
+and would benefit from a learned semantic-similarity replacement (e.g.,
+BioBERT-based scoring) in future work.
+% TODO (team): add classifier/generation-specific limitations (macro-F1 ceiling,
+% English-only scope, etc.)
+
+\section*{Ethics Statement}
+% TODO (team): broader impact of automated biomedical simplification --
+% risk of dropped safety information, need for human oversight before
+% clinical deployment, etc.
+
+\bibliography{anthology,custom}
+\bibliographystyle{acl_natbib}
+
+\end{document}
