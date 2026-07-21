@@ -1,0 +1,11 @@
+detector_a,detector_b,both_fire,both_fire_pct,only_a,only_b,neither,phi_coefficient
+ner,warning,166,31.3,357,0,7,0.078
+syntactic,numerical,302,57.0,196,18,14,0.021
+numerical,umls,320,60.4,0,210,0,0.0
+ner,umls,523,98.7,0,7,0,0.0
+warning,umls,166,31.3,0,364,0,0.0
+syntactic,umls,498,94.0,0,32,0,0.0
+warning,numerical,98,18.5,68,222,142,-0.019
+ner,numerical,315,59.4,208,5,2,-0.026
+ner,syntactic,491,92.6,32,7,0,-0.029
+warning,syntactic,153,28.9,13,345,19,-0.051
