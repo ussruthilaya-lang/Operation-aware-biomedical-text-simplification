@@ -7,29 +7,74 @@
 
 ## PROGRESS CHECK — pending items (updated this session)
 
+### ARCHITECTURE CLARIFICATION — how the pieces actually connect (confirmed by reading real code, not assumed)
+
+**Pipeline as it exists today:**
+```
+[Pseudo-labeler]  source/target pairs -> length-ratio heuristic -> S/E/G label
+       |
+       v
+[TF-IDF + LR classifier]  source sentence TEXT ONLY -> predicted operation
+       (Sophakotra's file — trains on pseudo-labels, no target text at inference)
+
+[My 5 complexity detectors]  run SEPARATELY, parallel analysis
+       (NER, warning, syntactic, numerical, UMLS jargon)
+       -> feeds the co-occurrence table, NOT the classifier
+```
+
+**Key finding (confirmed by reading `pseudo_labeler.py` and the classifier training
+script directly, not inferred):**
+- Pseudo-labeling is pure **word-count length ratio** (target 15%+ longer =
+  Explanation, 15%+ shorter = Generalization, similar length = Substitution).
+  No semantic/UMLS reasoning involved in labeling itself.
+- A `_levenshtein`/`_normalized_edit_distance` function exists in
+  `pseudo_labeler.py` with a docstring implying edit-distance should factor
+  into Substitution detection, but it is **never actually called** by
+  `label_span()`. Dead code or abandoned design — worth asking Sophakotra
+  directly rather than assuming either way.
+- **My complexity detectors are NOT currently used as classifier features.**
+  The classifier's only input is raw TF-IDF over the source sentence text.
+  My detection work and her classifier are two separate, currently
+  unconnected analyses that both operate on the same PLABA data.
+
+**Open integration question for the team (not yet decided, needs discussion):**
+should complexity detector outputs (e.g. "UMLS jargon detected AND high
+syntactic depth") be added as features to the operation classifier? This
+could be a genuine ablation result for the paper ("adding detector signals
+improves macro-F1 from 0.424 to X") but is NOT built and would be NEW work,
+not integration of already-existing pieces. Needs a decision with Sophakotra
+before assuming it happens automatically.
+
 ### My pending items
 
-- [ ] Entity preservation metric (`src/evaluation/entity_preservation.py`)
-- [ ] Numerical preservation metric (`src/evaluation/numerical_preservation.py`)
-- [ ] Human evaluation coordination — warning-stratified sample, 5-point rubric
-- [ ] `environment.yml` (`numpy<2.0` pin) + `plaba_loader.py` docstring (granularity note)
-- [ ] Per-pair co-occurrence correlation (deeper analysis beyond the base table)
-- [ ] Audit `warning_lexicon.py` / `numerical_extractor.py` for false positives (same rigor as UMLS/NER got)
-- [ ] Test `syntactic_depth.py`'s heuristic fallback (`_approximate_depth`) logic itself — never independently verified
-- [ ] Revoke `Storage Object Admin` IAM grant on compute service account
-- [ ] Decide on / execute `umls-build-vm` teardown (index + data already backed up to GCS; setup scripts tested — safe to delete)
-- [ ] Send team message: n=635 vs. n=530 training set discrepancy
-- [ ] Send team message: possible silent-fallback bug in prelim's syntactic depth number (82.7%)
-- [ ] Review/polish paper section drafts (Abstract, page-budget trim once teammates' sections land)
+- [ ] Entity preservation metric (`src/evaluation/entity_preservation.py`) — ✅ DONE
+- [ ] Numerical preservation metric (`src/evaluation/numerical_preservation.py`) — ✅ DONE
+- [ ] Human evaluation coordination — warning-stratified sample, 5-point rubric — ✅ DONE
+- [ ] `environment.yml` + `plaba_loader.py` docstring — ✅ DONE (also fully solved the n=635 mystery: train.csv has 635 ROWS but 531 unique PMIDs, since 104 PMIDs have 2 adaptation-version rows each; 427x1 + 104x2 = 635)
+- [ ] Per-pair co-occurrence correlation — ✅ DONE (finding: detectors fire nearly independently of each other, phi coefficients all near zero — supports the "5 orthogonal signals" architectural claim)
+- [ ] Audit `warning_lexicon.py` / `numerical_extractor.py` for false positives — ✅ DONE, found + fixed 2 real bugs (negation blindness, decimal truncation)
+- [ ] Test `syntactic_depth.py`'s heuristic fallback logic — ✅ DONE, found it actively misranks complexity (backwards), made it fail loudly instead of silently guessing
+- [ ] Revoke `Storage Object Admin` IAM grant — ✅ DONE
+- [ ] `umls-build-vm` teardown — ✅ DONE
+- [ ] Send team message: n=635 vs. n=530 — ⬜ send updated/RESOLVED version (mystery fully solved, not just flagged)
+- [ ] Send team message: syntactic depth silent-fallback flag — ⬜ still pending, now also mention the actual fix (raises RuntimeError now)
+- [ ] Discuss with Sophakotra: should complexity detectors feed the classifier as features? (see Architecture Clarification above) — ⬜ NEW, not yet discussed
+- [ ] Confirm with Sophakotra: is the unused `_levenshtein` function in `pseudo_labeler.py` dead code or intentional? — ⬜ NEW, not yet discussed
+- [ ] Review/polish paper section drafts (Abstract, page-budget trim once teammates' sections land) — ⬜ pending, blocked on teammates' sections landing in Overleaf
+
+### My substantive work is now COMPLETE, pending only:
+1. Sending the 2 team messages (text ready, just needs sending)
+2. Two architecture/integration questions to raise with Sophakotra (above)
+3. Final paper assembly once teammates' sections land (Thursday plan)
 
 ### Pending from teammates (for the shared ACL paper)
 
-| Owner | Owns |
-|---|---|
-| Sophakotra | Operation classifier results, generation pipeline, Main Idea (top-level architecture) section |
-| Zihao | Full-corpus evaluation, model inference results |
-| Rishabh | Readability-vs-safety scatter plot, Related Work condensing help |
-| Whole team | Introduction, Problem section, Conclusion, Ethics Statement |
+| Owner | Owns | Notes |
+|---|---|---|
+| Sophakotra | Operation classifier results, generation pipeline, Main Idea (top-level architecture) section | Classifier already trained/evaluated (prelim: 0.424 macro-F1). Confirm: does she plan to integrate complexity-detector features, or keep TF-IDF-only for the final paper? |
+| Zihao | Full-corpus evaluation, model inference results | |
+| Rishabh | Readability-vs-safety scatter plot, Related Work condensing help | |
+| Whole team | Introduction, Problem section, Conclusion, Ethics Statement | |
 
 ---
 
