@@ -6,7 +6,15 @@ dependencies:
   - python=3.10
   - spacy>=3.6.0
   - pandas>=2.0.0
-  - numpy>=1.24.0
+  # numpy<2.0 pinned explicitly — see Bug 1 in the team bug log.
+  # A later, uncontrolled numpy upgrade (e.g. via `pip install` of an
+  # unrelated package into this environment) breaks thinc's compiled
+  # Cython extensions (numpy_ops.pyx), which are compiled against a
+  # specific numpy ABI. This surfaces as:
+  #   ValueError: numpy.dtype size changed, may indicate binary incompatibility.
+  # Do not remove this upper bound without re-testing the full spaCy/
+  # thinc/scispaCy chain end to end.
+  - numpy>=1.24.0,<2.0
   - scikit-learn>=1.3.0
   - matplotlib>=3.7.0
   - seaborn>=0.12.0
@@ -21,3 +29,25 @@ dependencies:
     - transformers>=4.35.0
     - torch>=2.0.0
     - tqdm>=4.65.0
+    - wordfreq  # used by src/complexity/umls_matcher.py's Zipf-frequency
+                # common-English filter (see umls_matcher.py docstring)
+
+# ---------------------------------------------------------------------
+# NOT included in this environment, on purpose — see infra/ for why:
+#
+# QuickUMLS + a real UMLS index: cannot be pip-installed into this
+# environment directly. QuickUMLS's dependency chain (leveldb,
+# quickumls-simstring) is incompatible with Python 3.12+ (removed
+# stdlib/C-API functions the packages still rely on) and requires a
+# scripted workaround. Use infra/setup_quickumls.sh on a machine/VM
+# where you need real UMLS lookup (not this general dev environment).
+#
+# scispaCy NER model (en_ner_bc5cdr_md): requires spaCy <3.5, which
+# conflicts with the spaCy >=3.6.0 pinned above (needed by QuickUMLS's
+# runtime matcher, which loads spaCy at match-time, not just install-
+# time). These two cannot coexist in one environment. Use
+# infra/setup_ner_env.sh to create a SEPARATE, isolated conda
+# environment (Python 3.9) for NER specifically. The team's evaluation
+# orchestrator (src/evaluation/run_complexity_analysis.py) bridges to
+# that separate environment via subprocess — see ner_runner_subprocess.py.
+# ---------------------------------------------------------------------
