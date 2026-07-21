@@ -16,8 +16,10 @@ NUMERICAL_PATTERNS = [
     r'\(?\s*\d+\.?\d*\s*[-–]\s*\d+\.?\d*\s*\)?',
     # P-values: p<0.05, p=0.001
     r'\bp\s*[<>=≤≥]\s*0\.\d+',
-    # Plain numbers with units
-    r'\b\d+\s*(?:patients|participants|subjects|trials|weeks|months|years|days|hours)\b',
+    # Plain numbers with units — FIXED: \d+\.?\d* allows decimals
+    # (was \d+ only, which truncated "16.8 years" into "8 years" by
+    # matching just the digit after the decimal point)
+    r'\b\d+\.?\d*\s*(?:patients|participants|subjects|trials|weeks|months|years?|days|hours)\b',
 ]
 
 def extract_numerical_expressions(text):
