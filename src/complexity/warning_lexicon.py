@@ -29,7 +29,8 @@ WARNING_CUES = {
     ],
     "side_effect": [
         "side effect", "adverse effect", "adverse event",
-        "adverse reaction", "unwanted effect", "complication"
+        "adverse reaction", "unwanted effect", "complication",
+        "adverse drug reaction", "adverse outcome"  # ADDED — found via feature-file audit
     ]
 }
 
