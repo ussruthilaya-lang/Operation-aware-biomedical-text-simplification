@@ -7,7 +7,8 @@
 WARNING_CUES = {
     "contraindication": [
         "contraindicated", "contraindication", "must not be used",
-        "should not be taken", "do not use", "not recommended"
+        "should not be taken", "should not be used", "do not use",
+        "not recommended"
     ],
     "risk_alert": [
         "risk of", "increased risk", "higher risk", "danger of",
