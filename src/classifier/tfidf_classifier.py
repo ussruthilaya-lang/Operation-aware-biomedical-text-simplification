@@ -33,26 +33,38 @@ from src.data.pseudo_labeler import (
 # Fixed label order so the confusion matrix rows/columns are always readable.
 LABELS = ["Substitution", "Explanation", "Generalization"]
 
-# ngram_range=(1,2): unigrams catch jargon tokens, bigrams catch multi-word
-# concepts. class_weight='balanced': Generalization is the minority class.
-VECTORIZER = TfidfVectorizer(ngram_range=(1, 2), max_features=50000, lowercase=True)
-MODEL = LogisticRegression(class_weight="balanced", solver="lbfgs", max_iter=1000)
+
+def build_pipeline():
+    """
+    Create a stateless sklearn Pipeline: TF-IDF vectorizer + Logistic Regression.
+    ngram_range=(1,2): unigrams catch jargon tokens, bigrams catch multi-word concepts.
+    class_weight='balanced': Generalization is the minority class.
+    """
+    from sklearn.pipeline import Pipeline
+    return Pipeline([
+        ("tfidf", TfidfVectorizer(ngram_range=(1, 2), max_features=50000, lowercase=True)),
+        ("classifier", LogisticRegression(class_weight="balanced", solver="lbfgs", max_iter=1000)),
+    ])
 
 
 def train(X_train, y_train):
-    """Fit TF-IDF on the training text, then train Logistic Regression."""
-    X_vec = VECTORIZER.fit_transform(X_train)
-    MODEL.fit(X_vec, y_train)
+    """
+    Create and train a TF-IDF + Logistic Regression pipeline.
+    Returns the trained pipeline (no side effects on module state).
+    """
+    pipeline = build_pipeline()
+    pipeline.fit(X_train, y_train)
+    return pipeline
 
 
-def predict(X_test):
-    """Predict operation labels for new source sentences."""
-    return MODEL.predict(VECTORIZER.transform(X_test))
+def predict(pipeline, X_test):
+    """Predict operation labels for new source sentences using the given pipeline."""
+    return pipeline.predict(X_test)
 
 
-def evaluate(X_test, y_test):
+def evaluate(pipeline, X_test, y_test):
     """Return accuracy, macro-F1, per-class F1, and confusion matrix."""
-    y_pred = predict(X_test)
+    y_pred = predict(pipeline, X_test)
     return {
         "accuracy": accuracy_score(y_test, y_pred),
         "macro_f1": f1_score(y_test, y_pred, average="macro", labels=LABELS),
@@ -92,10 +104,10 @@ if __name__ == "__main__":
     print(f"Train pairs: {len(train_df)}   Val pairs: {len(val_df)}")
 
     print("\n=== Training TF-IDF + Logistic Regression ===")
-    train(train_df["source"], train_df["operation"])
+    pipeline = train(train_df["source"], train_df["operation"])
 
     print("\n=== Evaluation on validation set ===")
-    results = evaluate(val_df["source"], val_df["operation"])
+    results = evaluate(pipeline, val_df["source"], val_df["operation"])
     print(f"Accuracy : {results['accuracy']:.3f}")
     print(f"Macro-F1 : {results['macro_f1']:.3f}")
     print("\nPer-class F1:")
