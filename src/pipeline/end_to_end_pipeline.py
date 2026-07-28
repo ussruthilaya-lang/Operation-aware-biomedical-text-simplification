@@ -28,6 +28,9 @@ from transformers import (
 from src.pipeline.operation_router import route_operation
 from src.pipeline.constrained_prompts import get_prompt
 from src.evaluation.warning_preservation import compute_warning_preservation_rate
+from src.baselines.baseline2_rule_based_chv import chv_substitute
+
+from src.classifier.biobert_classifier import CHECKPOINT_DIR as BIOBERT_CHECKPOINT_DIR
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CLASSIFIER_MODEL = "dmis-lab/biobert-base-cased-v1.2"
@@ -49,10 +52,19 @@ class OperationAwarePipeline:
                           If None, uses placeholder.
             load_llm: Whether to load FLAN-T5 by default (True).
         """
-        print("Loading BioBERT classifier...")
-        self.tokenizer = BertTokenizer.from_pretrained(CLASSIFIER_MODEL)
+        if not os.path.isdir(BIOBERT_CHECKPOINT_DIR):
+            raise FileNotFoundError(
+                f"No fine-tuned BioBERT checkpoint found at {BIOBERT_CHECKPOINT_DIR}. "
+                f"Loading raw '{CLASSIFIER_MODEL}' here would silently attach a "
+                f"randomly initialized (untrained) classification head and produce "
+                f"meaningless operation predictions. Run "
+                f"`python -m src.classifier.biobert_classifier` first to train and "
+                f"save the checkpoint."
+            )
+        print(f"Loading fine-tuned BioBERT classifier from {BIOBERT_CHECKPOINT_DIR}...")
+        self.tokenizer = BertTokenizer.from_pretrained(BIOBERT_CHECKPOINT_DIR)
         self.classifier = BertForSequenceClassification.from_pretrained(
-            CLASSIFIER_MODEL, num_labels=3
+            BIOBERT_CHECKPOINT_DIR
         ).to(DEVICE)
         self.classifier.eval()
 
@@ -65,7 +77,11 @@ class OperationAwarePipeline:
             self.llm_model = llm_model
             self.llm_tokenizer = None
 
-        self.chv_lookup_fn = chv_lookup_fn
+        # Default to the real sentence-level CHV substitution (Rishabh's
+        # chv_lookup.py, applied via baseline2's whole-sentence substitution
+        # function) rather than a no-op placeholder, so Substitution-routed
+        # sentences are actually simplified instead of silently passed through.
+        self.chv_lookup_fn = chv_lookup_fn or chv_substitute
 
     def predict_operation(self, sentence: str) -> str:
         """Predict operation type for a sentence."""

@@ -33,6 +33,12 @@ LABELS = ["Substitution", "Explanation", "Generalization"]
 LABEL2ID = {label: idx for idx, label in enumerate(LABELS)}
 ID2LABEL = {idx: label for label, idx in LABEL2ID.items()}
 
+# Where the fine-tuned classifier is persisted. end_to_end_pipeline.py loads
+# from here — without this, the pipeline would silently fall back to raw
+# pretrained BioBERT with a randomly initialized (untrained) 3-way head.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CHECKPOINT_DIR = os.path.join(_REPO_ROOT, "models", "biobert_operation_classifier")
+
 # Device setup
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {DEVICE}")
@@ -197,9 +203,17 @@ if __name__ == "__main__":
 
         if val_results['macro_f1'] > best_val_f1:
             best_val_f1 = val_results['macro_f1']
+            # Persist the best-epoch checkpoint. Without this, the trained
+            # weights are lost when the process exits and end_to_end_pipeline.py
+            # ends up loading raw, untrained BioBERT instead.
+            os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+            model.save_pretrained(CHECKPOINT_DIR)
+            tokenizer.save_pretrained(CHECKPOINT_DIR)
+            print(f"  New best val macro-F1 ({best_val_f1:.3f}) — saved checkpoint to {CHECKPOINT_DIR}")
 
-    print("\n=== Final Evaluation on validation set ===")
-    val_results = evaluate(model, val_loader)
+    print("\n=== Final Evaluation on validation set (best checkpoint) ===")
+    best_model = BertForSequenceClassification.from_pretrained(CHECKPOINT_DIR).to(DEVICE)
+    val_results = evaluate(best_model, val_loader)
     print(f"Accuracy : {val_results['accuracy']:.3f}")
     print(f"Macro-F1 : {val_results['macro_f1']:.3f}")
     print(f"\nComparison to TF-IDF baseline: {val_results['macro_f1']:.3f} vs 0.424")
