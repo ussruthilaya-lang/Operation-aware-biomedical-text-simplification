@@ -12,9 +12,7 @@ import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.preprocessing import StandardScaler
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -35,19 +33,6 @@ LABELS = ["Substitution", "Explanation", "Generalization"]
 # Repo-root-relative paths
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _FEATURES_CSV = os.path.join(_REPO_ROOT, "results", "classifier_features.csv")
-
-
-class FeatureExtractor(BaseEstimator, TransformerMixin):
-    """Extract numeric features from a DataFrame."""
-    def __init__(self, feature_cols):
-        self.feature_cols = feature_cols
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X):
-        # X should be a DataFrame with the feature columns
-        return X[self.feature_cols].values
 
 
 def load_training_set(csv_path=_DEFAULT_OUT):
@@ -85,19 +70,10 @@ def train_model_2():
 
     print(f"Train pairs: {len(train_df)}   Val pairs: {len(val_df)}")
 
-    # Join features with training data
-    train_merged = train_df.merge(
-        features_df,
-        on=["pmid", "adaptation", "sent_id"],
-        how="left"
-    )
-
-    # Join features with validation data
-    val_merged = val_df.merge(
-        features_df,
-        on=["pmid", "adaptation", "sent_id"],
-        how="left"
-    )
+    # Ensure consistent types for merging
+    for df in [train_df, val_df, features_df]:
+        df["pmid"] = df["pmid"].astype(str)
+        df["sent_id"] = df["sent_id"].astype(str)
 
     # Feature columns for Model 2
     feature_cols_m2 = [
@@ -106,23 +82,37 @@ def train_model_2():
         "umls_jargon_density",
     ]
 
-    print("\n=== Building pipeline ===")
-    pipeline = Pipeline([
-        ("features", FeatureUnion([
-            ("tfidf", TfidfVectorizer(ngram_range=(1, 2), max_features=5000, lowercase=True)),
-            ("numeric", Pipeline([
-                ("extract", FeatureExtractor(feature_cols_m2)),
-                ("scale", StandardScaler()),
-            ]))
-        ])),
-        ("classifier", LogisticRegression(class_weight="balanced", solver="lbfgs", max_iter=1000)),
-    ])
+    # Select only join keys + feature columns from features_df to avoid duplicate columns
+    features_subset = features_df[["pmid", "adaptation", "sent_id"] + feature_cols_m2]
+
+    # Join features with training data
+    train_merged = train_df.merge(features_subset, on=["pmid", "adaptation", "sent_id"], how="left")
+
+    # Join features with validation data
+    val_merged = val_df.merge(features_subset, on=["pmid", "adaptation", "sent_id"], how="left")
+
+    print("\n=== Building features ===")
+    # TF-IDF features
+    vectorizer = TfidfVectorizer(ngram_range=(1, 2), max_features=5000, lowercase=True)
+    X_tfidf_train = vectorizer.fit_transform(train_merged["source"])
+    X_tfidf_val = vectorizer.transform(val_merged["source"])
+
+    # Numeric features
+    scaler = StandardScaler()
+    X_numeric_train = scaler.fit_transform(train_merged[feature_cols_m2].fillna(0))
+    X_numeric_val = scaler.transform(val_merged[feature_cols_m2].fillna(0))
+
+    # Combine features
+    from scipy.sparse import hstack
+    X_train = hstack([X_tfidf_train, X_numeric_train])
+    X_val = hstack([X_tfidf_val, X_numeric_val])
 
     print("\n=== Training Model 2 ===")
-    pipeline.fit(train_merged, train_merged["operation"])
+    classifier = LogisticRegression(class_weight="balanced", solver="lbfgs", max_iter=1000)
+    classifier.fit(X_train, train_merged["operation"])
 
     print("\n=== Evaluation on validation set ===")
-    y_pred = pipeline.predict(val_merged)
+    y_pred = classifier.predict(X_val)
 
     accuracy = accuracy_score(val_merged["operation"], y_pred)
     macro_f1 = f1_score(val_merged["operation"], y_pred, average="macro", labels=LABELS)
@@ -161,15 +151,13 @@ def train_model_3():
 
     print(f"Train pairs: {len(train_df)}   Val pairs: {len(val_df)}")
 
+    # Ensure consistent types for merging
+    for df in [train_df, val_df, features_df]:
+        df["pmid"] = df["pmid"].astype(str)
+        df["sent_id"] = df["sent_id"].astype(str)
+
     # Join features with training data
     train_merged = train_df.merge(
-        features_df,
-        on=["pmid", "adaptation", "sent_id"],
-        how="left"
-    )
-
-    # Join features with validation data
-    val_merged = val_df.merge(
         features_df,
         on=["pmid", "adaptation", "sent_id"],
         how="left"
@@ -187,23 +175,37 @@ def train_model_3():
         "numerical_density",
     ]
 
-    print("\n=== Building pipeline ===")
-    pipeline = Pipeline([
-        ("features", FeatureUnion([
-            ("tfidf", TfidfVectorizer(ngram_range=(1, 2), max_features=5000, lowercase=True)),
-            ("numeric", Pipeline([
-                ("extract", FeatureExtractor(feature_cols_m3)),
-                ("scale", StandardScaler()),
-            ]))
-        ])),
-        ("classifier", LogisticRegression(class_weight="balanced", solver="lbfgs", max_iter=1000)),
-    ])
+    # Select only join keys + feature columns from features_df to avoid duplicate columns
+    features_subset = features_df[["pmid", "adaptation", "sent_id"] + feature_cols_m3]
+
+    # Join features with training data
+    train_merged = train_df.merge(features_subset, on=["pmid", "adaptation", "sent_id"], how="left")
+
+    # Join features with validation data
+    val_merged = val_df.merge(features_subset, on=["pmid", "adaptation", "sent_id"], how="left")
+
+    print("\n=== Building features ===")
+    # TF-IDF features
+    vectorizer = TfidfVectorizer(ngram_range=(1, 2), max_features=5000, lowercase=True)
+    X_tfidf_train = vectorizer.fit_transform(train_merged["source"])
+    X_tfidf_val = vectorizer.transform(val_merged["source"])
+
+    # Numeric features
+    scaler = StandardScaler()
+    X_numeric_train = scaler.fit_transform(train_merged[feature_cols_m3].fillna(0))
+    X_numeric_val = scaler.transform(val_merged[feature_cols_m3].fillna(0))
+
+    # Combine features
+    from scipy.sparse import hstack
+    X_train = hstack([X_tfidf_train, X_numeric_train])
+    X_val = hstack([X_tfidf_val, X_numeric_val])
 
     print("\n=== Training Model 3 ===")
-    pipeline.fit(train_merged, train_merged["operation"])
+    classifier = LogisticRegression(class_weight="balanced", solver="lbfgs", max_iter=1000)
+    classifier.fit(X_train, train_merged["operation"])
 
     print("\n=== Evaluation on validation set ===")
-    y_pred = pipeline.predict(val_merged)
+    y_pred = classifier.predict(X_val)
 
     accuracy = accuracy_score(val_merged["operation"], y_pred)
     macro_f1 = f1_score(val_merged["operation"], y_pred, average="macro", labels=LABELS)
