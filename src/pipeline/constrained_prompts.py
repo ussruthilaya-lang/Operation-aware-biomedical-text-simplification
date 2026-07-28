@@ -12,45 +12,13 @@ class PromptType(str, Enum):
     GENERALIZATION = "generalization"
 
 
-SUBSTITUTION_PROMPT = """Replace medical jargon with plain English equivalents.
-
-Medical sentence: {sentence}
-
-Instructions:
-- Identify medical or technical terms
-- Replace them with simple, everyday English words
-- Keep the same meaning
-- Do not add definitions or remove details
-
-Simplified sentence:"""
+SUBSTITUTION_PROMPT = """Replace medical jargon with plain English: {sentence}"""
 
 
-EXPLANATION_PROMPT = """Add a plain-English explanation in parentheses for medical terms.
-
-Medical sentence: {sentence}
-
-Instructions:
-- Identify medical or technical terms
-- Add explanations in parentheses right after each term
-- Explanations should use simple language
-- Keep all original information
-- Format: "term (plain explanation)"
-
-Simplified sentence with explanations:"""
+EXPLANATION_PROMPT = """Add plain-English explanations in parentheses for medical terms: {sentence}"""
 
 
-GENERALIZATION_PROMPT = """Remove technical details while keeping the main point.
-
-Medical sentence: {sentence}
-
-Instructions:
-- Remove numerical details, dosages, specific measurements
-- Remove technical jargon that's not essential to the main message
-- Keep the core clinical meaning
-- Use simpler structure if possible
-- Keep it concise
-
-Simplified sentence:"""
+GENERALIZATION_PROMPT = """Remove technical details and keep the main point simpler: {sentence}"""
 
 
 def get_prompt(prompt_type: str, sentence: str) -> str:
