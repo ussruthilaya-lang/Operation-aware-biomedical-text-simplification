@@ -99,3 +99,52 @@ Two citations from the original six were found to be duplicated against the same
 
 ### Standing rule adopted from prelim
 Before trusting any generation-based evaluation number, verify the actual model outputs on a handful of examples by hand — a metric contradiction (like high SARI paired with catastrophic warning loss) is a signal to investigate the pipeline, not a result to report at face value. This exact discipline is what caught the granularity bug before it reached the paper.
+
+---
+
+## FULL PAPER — PHASE 1 COMPLETE (07/26/26)
+
+**Branch:** `feature/zihao-full-evaluation`
+
+### What shipped
+
+1. **`run_evaluation.py` upgraded** from prelim 50-sample sampler to full-corpus final evaluator.
+2. **Added `entity_preservation` and `numerical_preservation`** to the metric suite, alongside the existing SARI / FKGL / compression / warning_preservation. Entity marked N/A this pass — Sruthilaya's NER detector runs in a separate isolated conda env per her `setup_ner_env.sh`; will wire in once we hand off the env.
+3. **Two splits per baseline** produced in one run:
+   - `overall` (n=1141 sentence-level pairs from the 109 unique val abstracts)
+   - `warning_stratified` stress test (n=73 warning-bearing sentences)
+   Same random vs. stratified discipline established in prelim.
+4. **Written to `results/final_evaluation.csv`** — preserves `results/prelim_evaluation.csv` rather than overwriting it, so both phases' numbers stay traceable.
+
+### Full-corpus results, val split (`n=1141` sentences, 109 abstracts)
+
+| System | SARI ↑ | FKGL ↓ | Compression | Warning Pres. ↑ | Numerical Pres. ↑ |
+|---|---|---|---|---|---|
+| Baseline 1 (no simp.) | 16.46 | 15.02 | 1.00 | 1.000 | 1.000 |
+| Baseline 2 (CHV rule) | 19.06 | 14.57 | 1.01 | 1.000 | 1.000 |
+| Baseline 3 (Direct LLM) | **24.37** | 14.54 | 0.96 | **0.959** | **0.949** |
+
+**Key finding:** the readability/safety trade-off predicted by the diagnostic hypothesis is now empirically visible in the full-corpus results. Direct LLM prompting achieves the highest SARI (24.37, +28% relative to CHV rule) but is the **only** baseline whose safety-preservation scores drop below 1.0 on the overall split. The two more conservative baselines sit at the safety ceiling by construction but leave text at a college-level reading grade. This is the first pass where the paper's central hypothesis is empirically supported by evaluation numbers rather than motivation alone.
+
+### Warning-stratified stress test (`n=73` warning-bearing sentences)
+
+| System | SARI ↑ | FKGL ↓ | Warning Pres. ↑ | Numerical Pres. ↑ |
+|     ---          |  ---  |  ---  |  ---  |  ---  |
+| Baseline 1       | 13.22 | 16.32 | 1.000 | 1.000 |
+| Baseline 2       | 17.85 | 15.80 | 1.000 | 1.000 |
+| Baseline 3 (LLM) | 19.82 | 16.69 | 0.959 | 1.000 |
+
+Interpretation: the LLM's warning drops from the overall split localize to warning-bearing sentences specifically — consistent with the prelim finding that stratified sampling is required to see where safety failures actually concentrate.
+
+### Data split clarification (07/26 — team-visible)
+
+- **530 abstracts** = train split (Sruthilaya's complexity coverage domain)
+- **109 abstracts / 138 rows / 1141 sentence pairs** = val split (my eval domain)
+- Different splits, not the same abstracts counted two ways. Paper prose will distinguish these explicitly.
+
+### Pending — waiting on team
+
+- **Baseline 4 (operation-aware system)** — Sophakotra's generation pipeline, once merged, plugs in as one line in the `BASELINES` registry.
+- **Test-set rerun** — per Sruthilaya's call, will re-run the full harness on `test.csv` for the final results table once baseline 4 is in. Same code path, only the input split differs — quick.
+- **Entity preservation live** — pending NER env handoff from Sruthilaya.
+- **Paper subsection** — Full-Corpus Evaluation subsection drafted locally, will drop into `paper/acl_latex.tex` once I have Overleaf access.

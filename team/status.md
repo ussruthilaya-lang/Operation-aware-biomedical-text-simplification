@@ -130,7 +130,7 @@ to reproduce every number in Section 2 from a clean checkout + these scripts.
 | Owner | Pending |
 |---|---|
 | Sophakotra | Decide on detector-feature integration question (Section 1); confirm `_levenshtein` dead-code question; generation pipeline; Main Idea section |
-| Zihao | Full-corpus evaluation (currently n=530 verified split, not the earlier n=635 estimate — use the corrected split) |
+| Zihao | Full-corpus val eval done (n=1141 pairs / 109 abstracts, three baselines × two splits, results in `results/final_evaluation.csv`, PR open). Awaiting Sophakotra's baseline 4 to add operation-aware system + Sruthilaya's call to rerun on test.csv for final table. |
 | Rishabh | Readability-vs-safety scatter plot (can now use verified n=530 numbers); Related Work condensing |
 | Whole team | Introduction, Problem section, Conclusion, Ethics Statement; final assembly + 8-page trim Thursday |
 | Sruthilaya | Paper section review/polish once other sections land; final combine Thursday |
