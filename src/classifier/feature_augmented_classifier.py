@@ -134,6 +134,14 @@ def train_model_2():
     print("labels:", LABELS)
     print(cm)
 
+    print("\n=== Saving checkpoint ===")
+    import joblib
+    os.makedirs("models/tfidf_umls_classifier", exist_ok=True)
+    joblib.dump(classifier, "models/tfidf_umls_classifier/model_2.pkl")
+    joblib.dump(vectorizer, "models/tfidf_umls_classifier/vectorizer.pkl")
+    joblib.dump(scaler, "models/tfidf_umls_classifier/scaler.pkl")
+    print("✓ Model 2 checkpoint saved to models/tfidf_umls_classifier/")
+
     return macro_f1
 
 
@@ -226,6 +234,14 @@ def train_model_3():
     print("Confusion matrix (rows=true, cols=pred):")
     print("labels:", LABELS)
     print(cm)
+
+    print("\n=== Saving checkpoint ===")
+    import joblib
+    os.makedirs("models/tfidf_all_features_classifier", exist_ok=True)
+    joblib.dump(classifier, "models/tfidf_all_features_classifier/model_3.pkl")
+    joblib.dump(vectorizer, "models/tfidf_all_features_classifier/vectorizer.pkl")
+    joblib.dump(scaler, "models/tfidf_all_features_classifier/scaler.pkl")
+    print("✓ Model 3 checkpoint saved to models/tfidf_all_features_classifier/")
 
     return macro_f1
 

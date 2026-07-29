@@ -1,14 +1,8 @@
-# TF-IDF + Logistic Regression Operation Classifier (Deliverable 2)
-#
-# First rung of the three-model progression: TF-IDF+LR -> BERT-base -> BioBERT.
-# Question it answers: can surface lexical features alone predict the operation
-# (Substitution / Explanation / Generalization) a source sentence needs?
-#
-# Input  = SOURCE sentence only (the target is unavailable at inference — we
-#          decide the operation before generating the simplified text).
-# Output = operation label.
-#
-# For prelim: train on the pseudo-labeled spans, evaluate on the val set.
+# Removed globals VECTORIZER and MODEL — no more silent state sharing
+# Added build_pipeline() — creates a fresh Pipeline each time
+# train() now returns the pipeline instead of modifying module state
+# predict() and evaluate() accept the pipeline as a parameter — explicit dependency
+# Updated __main__ to capture and pass the pipeline through the workflow
 
 import os
 
@@ -118,3 +112,9 @@ if __name__ == "__main__":
     print("Confusion matrix (rows=true, cols=pred):")
     print("labels:", LABELS)
     print(results["confusion_matrix"])
+
+    print("\n=== Saving checkpoint ===")
+    import joblib
+    os.makedirs("models/tfidf_operation_classifier", exist_ok=True)
+    joblib.dump(pipeline, "models/tfidf_operation_classifier/pipeline.pkl")
+    print("✓ Checkpoint saved to models/tfidf_operation_classifier/")

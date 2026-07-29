@@ -7,3 +7,8 @@ __pycache__/
 .ipynb_checkpoints/
 
 data/plaba/
+
+# Model checkpoints (large binary files - share via cloud storage)
+models/
+*.pkl
+*.bin

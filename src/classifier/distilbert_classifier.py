@@ -213,3 +213,9 @@ if __name__ == "__main__":
     print("Confusion matrix (rows=true, cols=pred):")
     print("labels:", LABELS)
     print(val_results["confusion_matrix"])
+
+    print("\n=== Saving checkpoint ===")
+    os.makedirs("models/distilbert_operation_classifier", exist_ok=True)
+    model.save_pretrained("models/distilbert_operation_classifier")
+    tokenizer.save_pretrained("models/distilbert_operation_classifier")
+    print("✓ Checkpoint saved to models/distilbert_operation_classifier/")
