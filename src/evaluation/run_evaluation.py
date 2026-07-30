@@ -41,6 +41,7 @@ from src.pipeline.end_to_end_pipeline import OperationAwarePipeline
 
 
 OUT_PATH = 'results/final_evaluation.csv'
+_b4_pipeline = None
 
 def b4_simplify(sentence):
     global _b4_pipeline
