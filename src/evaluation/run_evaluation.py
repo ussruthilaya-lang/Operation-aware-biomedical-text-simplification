@@ -37,14 +37,23 @@ from src.evaluation.numerical_preservation import compute_corpus_numerical_prese
 
 from src.data.pseudo_labeler import build_pairs_from_plaba_json, _DEFAULT_JSON, _VAL_CSV
 from src.complexity.warning_lexicon import flag_sentence as flag_warning
+from src.pipeline.end_to_end_pipeline import OperationAwarePipeline
 
 
 OUT_PATH = 'results/final_evaluation.csv'
+_b4_pipeline = None
+
+def b4_simplify(sentence):
+    global _b4_pipeline
+    if _b4_pipeline is None:
+        _b4_pipeline = OperationAwarePipeline(load_llm=True)
+    return _b4_pipeline.simplify(sentence)['output']
 
 BASELINES = [
     ('baseline1_no_simplification', b1_simplify),
     ('baseline2_rule_based_chv', b2_simplify),
     ('baseline3_direct_llm', b3_simplify),
+    ('baseline4_operation_aware', b4_simplify),
 ]
 
 
