@@ -25,10 +25,15 @@ from transformers import (
     BertTokenizer, BertForSequenceClassification,
     AutoTokenizer, T5ForConditionalGeneration
 )
+import re
+
 from src.pipeline.operation_router import route_operation
 from src.pipeline.constrained_prompts import get_prompt
 from src.evaluation.warning_preservation import compute_warning_preservation_rate
 from src.baselines.baseline2_rule_based_chv import chv_substitute
+from src.data.chv_lookup import CHV_DICTIONARY
+from src.complexity.numerical_extractor import extract_numerical_expressions
+from src.complexity.warning_lexicon import detect_warnings
 
 from src.classifier.biobert_classifier import CHECKPOINT_DIR as BIOBERT_CHECKPOINT_DIR
 
@@ -36,6 +41,21 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CLASSIFIER_MODEL = "dmis-lab/biobert-base-cased-v1.2"
 LLM_MODEL = "google/flan-t5-base"
 LABELS = ["Substitution", "Explanation", "Generalization"]
+
+
+def _get_chv_replacements_applied(original_text):
+    """
+    Return the plain-English replacement terms chv_substitute() actually
+    inserted for this sentence (reuses the same matching logic as
+    chv_substitute itself, so the list is exactly what got substituted).
+    """
+    applied = []
+    sorted_terms = sorted(CHV_DICTIONARY.keys(), key=len, reverse=True)
+    for term in sorted_terms:
+        pattern = re.compile(r'\b' + re.escape(term) + r'\b', re.IGNORECASE)
+        if pattern.search(original_text):
+            applied.append(CHV_DICTIONARY[term])
+    return applied
 
 
 class OperationAwarePipeline:
@@ -114,6 +134,68 @@ class OperationAwarePipeline:
             # Placeholder: return original sentence
             return sentence
 
+    def chv_substitute_and_polish(self, sentence: str) -> str:
+        """
+        Substitution pathway: CHV lookup first (safe, deterministic), then an
+        optional fluency-polish LLM pass to recover readability that pure
+        dictionary word-swapping can't provide.
+
+        The polish step is constrained using the same complexity-detection
+        features built earlier in the project: numerical expressions, warning
+        phrases, and the CHV replacement terms just inserted are extracted
+        explicitly and injected into the prompt as spans the LLM must not
+        alter, rather than a vague "don't change important terms"
+        instruction. The polish output is only accepted if every protected
+        span actually survived — verified post-hoc, not just requested —
+        otherwise we fall back to the CHV-only (guaranteed-safe) output.
+
+        Warning phrases were added after an initial version (numeric +
+        CHV-term protection only) measurably dropped warning preservation
+        from 1.000 to 0.986 on the val set — a Substitution-routed sentence
+        that also contained a warning phrase had its jargon/numbers protected
+        but not the warning language itself, so the polish pass could reword
+        it. Protecting warning phrases explicitly closes that gap.
+        """
+        substituted = self.chv_lookup_fn(sentence)
+
+        if not self.llm_model or not self.llm_tokenizer:
+            return substituted
+
+        numeric_spans = [m['match'] for m in extract_numerical_expressions(sentence)]
+        warning_spans = [w['match'] for w in detect_warnings(sentence)]
+        replaced_terms = _get_chv_replacements_applied(sentence)
+        protected = sorted(set(numeric_spans + warning_spans + replaced_terms))
+
+        if not protected:
+            # Nothing safety-critical to protect and nothing was substituted —
+            # not worth risking an LLM rewrite for no expected benefit.
+            return substituted
+
+        protected_str = "; ".join(protected)
+        prompt = (
+            f"Rewrite this sentence to sound more natural, but you must keep "
+            f"these exact words and numbers unchanged: {protected_str}. "
+            f"Sentence: {substituted}"
+        )
+        inputs = self.llm_tokenizer(prompt, return_tensors="pt", max_length=512, truncation=True).to(DEVICE)
+
+        self.llm_model.eval()
+        with torch.no_grad():
+            outputs = self.llm_model.generate(
+                input_ids=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                max_new_tokens=256,
+                num_beams=4,
+            )
+        polished = self.llm_tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        polished_lower = polished.lower()
+        if all(p.lower() in polished_lower for p in protected):
+            return polished
+        # Polish dropped or altered a protected span — reject it and keep
+        # the CHV-only output, which is guaranteed safe by construction.
+        return substituted
+
     def llm_constrained_simplify(self, sentence: str, prompt_type: str) -> str:
         """
         Simplify using constrained LLM prompt (Explanation/Generalization).
@@ -127,15 +209,16 @@ class OperationAwarePipeline:
 
             self.llm_model.eval()  # Ensure eval mode
             with torch.no_grad():
+                # Matched to baseline3_direct_llm.py's decoding config
+                # (num_beams=4, max_new_tokens=256, deterministic beam search,
+                # no sampling) so the operation-aware-vs-baselines comparison
+                # isolates the effect of classify-then-route, not a
+                # confounded difference in decoding strategy.
                 outputs = self.llm_model.generate(
                     input_ids=inputs["input_ids"],
                     attention_mask=inputs["attention_mask"],
-                    max_length=100,
-                    min_length=5,
-                    do_sample=True,
-                    top_p=0.9,
-                    temperature=0.8,
-                    num_return_sequences=1
+                    max_new_tokens=256,
+                    num_beams=4,
                 )
 
             # Decode output
@@ -170,7 +253,7 @@ class OperationAwarePipeline:
 
         # Step 3: Execute method
         if routing["method"] == "chv_lookup":
-            simplified = self.chv_lookup_placeholder(sentence)
+            simplified = self.chv_substitute_and_polish(sentence)
         else:  # llm_constrained
             prompt_type = routing["prompt_type"]
             simplified = self.llm_constrained_simplify(sentence, prompt_type)

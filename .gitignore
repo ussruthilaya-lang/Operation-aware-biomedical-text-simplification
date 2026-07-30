@@ -7,3 +7,7 @@ __pycache__/
 .ipynb_checkpoints/
 
 data/plaba/
+
+# Trained model checkpoints — regenerate via src/classifier/biobert_classifier.py,
+# too large for git (BioBERT checkpoint alone is ~430MB, over GitHub's 100MB limit)
+models/

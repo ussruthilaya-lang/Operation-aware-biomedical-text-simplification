@@ -1,5 +1,5 @@
 # Project Status — Operation-Aware Biomedical Text Simplification
-**Last updated:** 07/28/26 by Sruthilaya
+**Last updated:** 07/29/26 by Sruthilaya
 **Deadline:** Team finishes remaining work by Thursday; final combine + submission after.
 
 ---
@@ -48,16 +48,90 @@ operation-aware-vs-baselines comparison can be run for real).
 `chv_lookup_fn` to a placeholder that returned the input sentence unchanged
 — meaning Substitution-routed sentences would score artificially perfect on
 warning/entity preservation for the wrong reason (they were never touched).
-Now defaults to Rishabh's real `chv_substitute()` (`baseline2_rule_based_chv.py`,
-built on `src/data/chv_lookup.py`), so Substitution actually happens.
+
+**BioBERT checkpoint training complete (07/29):** val macro-F1 0.461,
+independently confirming Track 1's reported 0.465 (small variance is
+expected — training isn't seeded). Checkpoint saved to
+`models/biobert_operation_classifier/`. Generalization remains the weakest
+class (F1 0.365, recall 32%, confused almost equally with both other
+classes) — see Section 2 and Section 5.1 item 2 for why and what to do
+about it.
+
+**Bug 3 — decoding-strategy mismatch, found during planning, fixed before
+running anything.** `baseline3_direct_llm.py` (the Direct-LLM baseline
+already in `results/final_evaluation.csv`) generates with deterministic beam
+search (`num_beams=4`, `max_new_tokens=256`). The operation-aware pipeline's
+`llm_constrained_simplify()` was instead using random sampling
+(`do_sample=True, top_p=0.9, temperature=0.8`, `max_length=100`). Running the
+comparison as-is would have confounded "does operation-aware routing help"
+with "does beam search vs. sampling produce different text" — the same class
+of mistake as Bug 1's ablation confound. **Fixed:** matched
+`llm_constrained_simplify` to the same beam-search config as baseline3.
+
+**HEADLINE RESULT LANDED (07/29) — the paper's central comparison now
+exists.** Ran `OperationAwarePipeline` (trained BioBERT + real CHV +
+decoding-matched FLAN-T5) against the same val split Zihao used (n=1,141
+overall, n=73 warning-stratified), through the same metric suite. Initial
+run: SARI 18.76 overall, warning preservation a perfect 1.000 (vs.
+Direct-LLM's 0.959) — confirms the thesis's safety half directly, but SARI
+trailed Direct-LLM (24.37) and barely beat Rule-based CHV (19.06), because
+43% of sentences (490/1,141) routed to Substitution got only a flat CHV
+dictionary swap with zero fluency improvement.
+
+**New addition — CHV-then-polish, using the complexity-detection features
+as a generation-time guardrail (not just a classifier input).** Added
+`chv_substitute_and_polish()`: CHV substitution first (safe, deterministic),
+then an optional FLAN-T5 fluency-polish pass, explicitly constrained by
+protected spans pulled from `extract_numerical_expressions()`,
+`detect_warnings()`, and the actual CHV replacement terms just inserted —
+injected into the prompt as spans the LLM must not alter, and verified
+post-hoc (not just requested): if any protected span is missing from the
+polished output, the pipeline falls back to the guaranteed-safe CHV-only
+result. This is the first place in the project where the complexity
+detectors feed the generation step directly, not just the classifier or the
+diagnosis narrative. Iterated in 3 passes:
+
+| Version | SARI (overall) | SARI (stratified) | Warning Pres. (both splits) |
+|---|---|---|---|
+| CHV-only (no polish) | 18.76 | 16.07 | 1.000 |
+| CHV+polish, numeric/CHV-term protection only | 20.09 | 16.42 | 0.986 (regression) |
+| **CHV+polish, + warning-phrase protection (final)** | **20.22** | **17.99** | **1.000** |
+
+The middle version's regression (warning preservation dropping to 0.986) was
+itself a useful, honest finding: protecting numbers and substituted jargon
+wasn't enough, because a Substitution-routed sentence that also contained a
+warning phrase had that phrase left unprotected and the polish pass could
+reword it. Adding `detect_warnings()`'s matched phrases to the protected-span
+list fully recovered warning preservation to 1.000 **and** pushed SARI
+higher than the unprotected version — a genuine win, not a trade-off.
+
+**Final headline table (val set, n=1,141 overall / n=73 warning-stratified):**
+
+| System | SARI (overall) | Warning Pres. | Numerical Pres. |
+|---|---|---|---|
+| No simplification | 16.46 | 1.000 | 1.000 |
+| Rule-based CHV | 19.06 | 1.000 | 1.000 |
+| Direct LLM (no guidance) | 24.37 | 0.959 | 0.949 |
+| **Operation-aware (this paper, final)** | **20.22** | **1.000** | **0.980** |
+
+Operation-aware now beats Rule-based CHV on SARI while matching it on
+warning preservation, and closes much of the SARI gap to Direct-LLM
+(5.61→4.15 points) while remaining the only system besides Rule-based CHV
+with perfect warning preservation. Frame this honestly as "near-total safety
+preservation at a moderate, now-narrowed readability cost relative to an
+unconstrained LLM" — not outright dominance on every metric, since
+Direct-LLM still leads on raw SARI.
 
 **Net effect:** neither Track 1 (BioBERT +9.7%, real) nor Track 2 (domain
 features, corrected below) needed to be thrown out — but Track 2's framing
-flips from negative to positive, and the pipeline needed two real bugs fixed
-before it can produce a trustworthy headline number. This is going into
-Limitations either way: **Track 1/2 were both evaluated on val, not test**
-— one final test-set run with the frozen final configuration is still
-needed before these numbers go in the paper's headline table.
+flips from negative to positive, and the pipeline needed three real bugs
+fixed (Track 2 ablation confound, untrained classifier, decoding mismatch)
+before it could produce a trustworthy headline number, which now exists.
+This is going into Limitations either way: **Track 1/2, Zihao's baselines,
+and this operation-aware run were all evaluated on val, not test** — one
+final test-set run with the frozen final configuration (Section 5, item 3,
+Zihao) is still needed before these numbers go in the paper's headline
+table for submission.
 
 ---
 
@@ -257,17 +331,66 @@ to reproduce every number in Section 2 from a clean checkout + these scripts.
   of this update — required before the operation-aware-vs-baselines
   comparison can be run)
 
-## 5. What's pending — by owner
+## 5. Final push — assigned by owner, sequenced to avoid overlap
 
-| Owner | Pending |
-|---|---|
-| Sruthilaya (in progress now) | BioBERT checkpoint re-training running; once done, run `OperationAwarePipeline` (BioBERT + CHV + FLAN-T5) against the val set through the same SARI/FKGL/warning/entity/numerical-preservation harness Zihao built, for the headline operation-aware-vs-3-baselines comparison — **this is the single most important number the paper's thesis rests on, and it still doesn't exist** |
-| Sophakotra / Son | Confirm which of Track 1's BioBERT is the final classifier (recommended, given +9.7% macro-F1); confirm `_levenshtein` dead-code question; Main Idea section — should describe the corrected Track 1/2 story, not the original PR framing |
-| Whole team | **One final test-set run** (not val) needed for both the classifier tables and the operation-aware pipeline comparison — everything reported so far (Track 1, Track 2, Zihao's baselines) was evaluated on val, which is appropriate for model selection but not for the paper's headline numbers |
-| Zihao | Full-corpus evaluation already done on val (n=1,141, both overall and warning-stratified splits) — needs the same treatment re-run once operation-aware system's real numbers exist, so all 4 systems are compared on identical splits |
-| Rishabh | Readability-vs-safety scatter plot — still not built (blocked on operation-aware numbers, which is now the active blocker, not Zihao's numbers which already landed); Related Work condensing; fix duplicate bib-key issue (`Ondov2025`/`Attal2023` in `paper/final_paper/custom.bib` duplicate `ondov2025lessons`/`attal2023plaba` already in `paper/custom.bib`) |
-| Whole team | Introduction, Problem section, Conclusion, Ethics Statement; final assembly + 8-page trim Thursday |
-| Sruthilaya | Paper section review/polish once other sections land; final combine Thursday |
+Each person owns a distinct set of files/artifacts below — nobody should
+need to edit another person's owned files. Sequencing matters (see
+"depends on" column): don't start a blocked item early on stale inputs.
+
+| # | Owner | Task | Owns / touches | Depends on | Produces (write results here) |
+|---|---|---|---|---|---|
+| 1 | **Sruthilaya** | ~~Fix decoding-strategy mismatch, run the operation-aware-vs-3-baselines comparison~~ **DONE (07/29).** Final: SARI 20.22 (overall), warning preservation 1.000, beats Rule-based CHV on SARI while matching its safety — see Section 0 for the full result and the CHV-then-polish addition that got it there | `src/pipeline/end_to_end_pipeline.py`; `src/evaluation/run_operation_aware_evaluation.py` | — | `results/final_evaluation.csv` (`operation_aware` rows added) — **#3 and #4's scatter plot are now unblocked** |
+| 2 | **Sophakotra / Son** | Confirm BioBERT as final classifier; own the **BioBERT + domain features (UMLS + numerical)** experiment targeting the Generalization weakness (Section 5.1 item 2). **Must save to a separate checkpoint dir, not `models/biobert_operation_classifier/`**, so it doesn't overwrite the checkpoint #1 depends on. Also: Main Idea section (reflect the corrected Track 1/2 story, not the original PR framing); confirm `_levenshtein` dead-code question | `src/classifier/biobert_classifier.py` (read-only reference), new script/checkpoint dir e.g. `models/biobert_features_operation_classifier/`; `paper/final_paper/acl2023.tex` Main Idea section | None — can start immediately, fully parallel to #1 | New results file, e.g. `results/biobert_features_classifier.txt`; Main Idea prose |
+| 3 | **Zihao** | **Unblocked, start now.** Own the **final test-set run** (not val) — re-run the 3-baseline + operation-aware harness on the true 148-sentence test set now that #1's operation-aware run has landed, so all 4 systems are compared on identical, final splits. Also integrate entity preservation into the harness (coordinate with Sruthilaya on the detector, don't duplicate it) | `src/evaluation/run_evaluation.py` (his file, extend for test split) | #1 (done) | New file, e.g. `results/final_evaluation_testset.csv` (do not overwrite `final_evaluation.csv`, which stays as the val record) |
+| 4 | **Rishabh** | **New technical contribution: own the random-routing ablation** (Section 5.1 item 3) — build it as a ready-to-run script (self-contained: reuses `operation_router.py` + `end_to_end_pipeline.py`'s CHV/LLM functions with the routing decision shuffled instead of BioBERT's prediction). **Not required to run** — #1's result was a clear, unambiguous win (SARI up, warning preservation perfect), so the contingency condition for needing this ablation didn't trigger; keep it built and ready in case a reviewer asks, but don't spend time executing/reporting it unless asked. **Unblocked, start now:** readability-vs-safety scatter plot (real numbers exist — use the final headline table in Section 0), Related Work condensing, duplicate bib-key fix (`Ondov2025`/`Attal2023` in `paper/final_paper/custom.bib` vs. `ondov2025lessons`/`attal2023plaba` already in `paper/custom.bib`) | New script, e.g. `src/evaluation/run_routing_ablation.py`; `notebooks/visualizations.ipynb` (his file) for the scatter plot; `paper/final_paper/acl2023.tex` Related Work + `paper/final_paper/custom.bib` | #1 (done) | Scatter plot figure, e.g. `results/readability_safety_scatter.png`; ablation script kept on standby, not run |
+| 5 | Whole team | Introduction, Problem section, Conclusion, Ethics Statement; final 8-page trim | `paper/final_paper/acl2023.tex` (coordinate before editing simultaneously) | All of #1-4 for real numbers | — |
+| 6 | Sruthilaya | Final paper section review/polish once other sections land; final combine | — | #1-5 | — |
+
+**Conflict-avoidance notes:**
+- Only Sruthilaya touches `end_to_end_pipeline.py`'s decoding config, and only until #1 is done — nobody else should edit that file in the meantime.
+- Son's feature experiment must NOT write to `models/biobert_operation_classifier/` — that checkpoint is actively depended on by #1's run. Use a separate directory.
+- Zihao's test-set run and Rishabh's scatter plot both explicitly wait on #1 landing — starting early would mean redoing the work against a pipeline that's still being fixed.
+- Each new result goes to its own new file (see "Produces" column) rather than overwriting `results/final_evaluation.csv` or `results/classifier_features.csv` — those stay as the historical val-set record.
+
+### 5.1. New experiments identified this session (not yet run — priority-ordered)
+
+1. **Run the main operation-aware-vs-3-baselines comparison first (this is
+   still #1, unchanged).** Everything below is secondary to this.
+2. **BioBERT + domain features (UMLS + numerical), targeting the
+   Generalization weakness.** Track 1 (BioBERT alone) and Track 2 (features
+   + TF-IDF only) were never combined — nobody has tested BioBERT with the
+   engineered features concatenated before the classification head.
+   Motivation: BioBERT's current confusion matrix shows Generalization is
+   by far its weakest class (F1 0.365, recall 32%, confused almost equally
+   with both other classes) — plausibly because contextual embeddings alone
+   aren't finding a clean signal for it given the pseudo-label noise. An
+   explicit engineered signal (numerical/jargon density) is a different
+   *kind* of signal than what BERT infers implicitly, so it's worth testing
+   whether it gives BioBERT a more direct cue specifically for this class.
+   Caveat going in: numerical density alone already failed to help
+   Generalization in the TF-IDF ablation (0.410→0.387) — the label-noise
+   ceiling may cap this experiment too, but it's untested with BioBERT
+   specifically and worth 30-60 minutes to check.
+3. **Random-routing ablation — contingency only, not required.** The
+   general claim "classify-then-execute beats no classification" is already
+   established prior art (Cripwell et al. 2022, already cited) — this
+   paper's contribution is applying it to the biomedical safety domain, not
+   re-proving the mechanism from scratch. This ablation (same constrained
+   prompts, but routed to a random operation instead of BioBERT's
+   prediction) is only worth running **if the main comparison in item #1
+   comes back ambiguous** (e.g. SARI improves but preservation doesn't, or
+   the margin over Direct-LLM is small) — in that case it's the one piece
+   of evidence that separates "classification isn't accurate enough to
+   route correctly" from "downstream generation doesn't differentiate much
+   regardless of routing." Do not run pre-emptively; only reach for it if
+   item #1's result needs explaining.
+4. **A second LLM/generation backbone through the operation-aware router**
+   (e.g. Lay-SciFive or BART-w-CTs, already on Zihao's task list as
+   separate baselines) — lowest priority. Answers "does the
+   safety/readability trade-off and the operation-aware improvement
+   generalize beyond FLAN-T5-base," which matters for robustness but isn't
+   required to support the paper's core causal claim. Reasonable to leave
+   as a Limitations/Future Work line if time runs out before Thursday.
 
 ---
 
