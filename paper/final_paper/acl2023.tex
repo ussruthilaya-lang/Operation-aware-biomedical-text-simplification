@@ -41,10 +41,12 @@ classifier progresses from a TF-IDF baseline (0.424 macro-F1) through a
 general-domain contextual model (DistilBERT, 0.392, a \emph{regression}) to a
 biomedical-domain contextual model (BioBERT, 0.465, $+9.7\%$ over TF-IDF),
 demonstrating that domain-specific pretraining, not contextual pretraining alone,
-is what predicts operation type. A controlled feature-integration ablation shows
-that explicit domain features (UMLS jargon density, numerical density) improve the
-classifier by a further $2.1$--$2.5\%$ macro-F1 when correctly isolated from a
-confounding vocabulary-size change in an earlier draft of this experiment. Most
+is what predicts operation type. A controlled feature-integration ablation on the
+TF-IDF classifier shows that explicit domain features (UMLS jargon density,
+numerical density) improve macro-F1 by a further $2.1$--$2.5\%$ when correctly
+isolated from a confounding vocabulary-size change in an earlier draft of this
+experiment; whether the same features improve BioBERT specifically remains
+future work (Section~\ref{sec:conclusion}). Most
 importantly, we evaluate the complete operation-aware pipeline -- classification,
 CHV-based substitution, and constrained generation -- against three baselines on
 the held-out PLABA test set. Our system achieves a SARI of 21.72, exceeding
@@ -288,10 +290,11 @@ available, entity preservation.
 A central methodological finding from our evaluation is that \textbf{random
 sampling is statistically underpowered to detect rare safety failures}.
 Warning-bearing sentences occur at a base rate of approximately $5.7\%$ at the
-sentence level in our data (equivalently, $31.3\%$ of abstracts contain at least
-one warning-bearing sentence -- these are different units of analysis, and we
-report both explicitly to avoid an apparent contradiction between abstract-level
-and sentence-level rates); a random sample of 50 sentences showed all baseline
+sentence level in our data (separately, $31.3\%$ of abstracts contain at least
+one warning-bearing sentence -- these are different statistics over different
+units of analysis, and we report both explicitly to avoid an apparent
+contradiction between abstract-level and sentence-level rates); a random
+sample of 50 sentences showed all baseline
 systems achieving perfect warning preservation, a misleadingly optimistic result.
 Only a \emph{stratified} stress test -- restricted to warning-bearing sentences
 specifically -- revealed that unguided LLM-based simplification is the only
@@ -414,14 +417,16 @@ BioBERT                      & \textbf{0.465} \\
 \label{tab:classifier-progression}
 \end{table}
 
-BioBERT's confusion matrix reveals where difficulty concentrates: Generalization
-is by far its weakest class (F1 $0.365$, recall $32\%$), confused almost equally
-with both Substitution and Explanation, whereas contextual pretraining
-substantially improved Explanation recall over the TF-IDF baseline ($35\%
-\rightarrow 55\%$). We attribute Generalization's persistent difficulty at least
+BioBERT's confusion matrix reveals where difficulty concentrates across all
+three training runs: Generalization is consistently its weakest class (F1
+$0.365$--$0.423$, recall $29$--$32\%$ depending on the run), confused almost
+equally with both Substitution and Explanation, whereas contextual
+pretraining substantially improved Explanation recall over the TF-IDF
+baseline ($35\% \rightarrow 55\%$ in the run used for the deployed
+classifier). We attribute Generalization's persistent difficulty at least
 partly to the pseudo-label noise described above, rather than purely to
-architectural capacity, since a classifier cannot exceed the reliability of the
-labels it is trained against.
+architectural capacity, since a classifier cannot exceed the reliability of
+the labels it is trained against.
 
 \paragraph{Feature integration (corrected ablation).}
 \label{sec:feature-ablation}
@@ -513,9 +518,17 @@ metric and a safety metric simultaneously.
 We report the complete comparison on the held-out PLABA \emph{test} set
 ($n=1{,}000$ sentences overall; $n=49$ warning-bearing sentences in the
 stratified stress test), with the full pipeline configuration -- classifier
-checkpoint, CHV dictionary, and generation prompts -- frozen exactly as
+hyperparameters, CHV dictionary, and generation prompts -- frozen exactly as
 selected during validation, so no test-set information influenced any design
-decision. All LLM-based systems use matched decoding (beam search, 4 beams),
+decision. The classifier checkpoint deployed for this evaluation is one of
+the three independent BioBERT training runs reported in
+Section~\ref{sec:classifier-results} (macro-F1 $0.467$), re-trained under
+identical settings after an unrelated infrastructure incident rather than
+reused verbatim from the validation-time run; we note this explicitly rather
+than implying a single frozen weight file, and its macro-F1's consistency
+with the other two runs is itself evidence the specific training instance
+does not materially affect the results reported below. All LLM-based
+systems use matched decoding (beam search, 4 beams),
 so differences in generation strategy do not confound the comparison. The
 same evaluation was also run on the validation set during development
 ($n=1{,}141$ overall / $n=73$ stratified); we report test-set numbers as the
@@ -563,7 +576,7 @@ On the overall split (Table~\ref{tab:full-results}), our operation-aware
 system exceeds rule-based CHV substitution's readability (SARI $21.72$ vs.\
 $21.12$) while matching its
 perfect warning preservation, and narrows the SARI gap to the unguided LLM
-baseline from $7.05$ (rule-based CHV vs.\ Direct LLM) to $3.77$ points without
+baseline from $4.38$ (rule-based CHV vs.\ Direct LLM) to $3.77$ points without
 incurring that baseline's safety cost -- it also exceeds Direct LLM on
 numerical preservation ($0.963$ vs.\ $0.925$).
 

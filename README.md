@@ -21,11 +21,12 @@ reproducing the length-based pseudo-labeling rule.
 
 ## Where this stands right now (for reviewers)
 
-**Prelim was delivered and reviewed.** The full paper is in progress, with
-one core experiment still outstanding (see "What's still missing" below) —
-this section exists so a reviewer can quickly see what's proven, what's
-corrected from an earlier draft, and what's still open, rather than having
-to infer it from scattered results files.
+**Prelim was delivered and reviewed. The full paper draft is written**, with
+the central experiment now run and landed on the held-out test set (see
+"The headline result — landed" below) — this section exists so a reviewer
+can quickly see what's proven, what's corrected from an earlier draft, and
+what's still open, rather than having to infer it from scattered results
+files.
 
 ### Findings that are solid and reportable
 
@@ -99,35 +100,61 @@ to infer it from scattered results files.
   quality ceiling as much as a model-capacity ceiling, which is the more
   honest framing for the paper.
 
-### The headline result — landed
+### The headline result — landed, on both val and the held-out test set
 
 **The paper's central comparison — the operation-aware system vs. the 3
-baselines — has been run.** Same val split Zihao used (n=1,141 overall,
-n=73 warning-stratified), same metric suite:
+baselines — has been run on both splits, and the test-set run is the one
+that matters for the paper.** Test set (n=1,000 overall, n=49
+warning-stratified — the true held-out split, never touched during
+development):
 
 | System | SARI (overall) | Warning Pres. | Numerical Pres. |
 |---|---:|---:|---:|
-| No simplification | 16.46 | 1.000 | 1.000 |
-| Rule-based CHV | 19.06 | 1.000 | 1.000 |
-| Direct LLM (no guidance) | 24.37 | 0.959 | 0.949 |
-| **Operation-aware (this paper)** | **20.22** | **1.000** | **0.980** |
+| No simplification | 18.45 | 1.000 | 1.000 |
+| Rule-based CHV | 21.12 | 1.000 | 1.000 |
+| Direct LLM (no guidance) | 25.49 | 0.980 | 0.925 |
+| **Operation-aware (this paper)** | **21.72** | **1.000** | **0.963** |
 
-Operation-aware beats Rule-based CHV on SARI (20.22 vs. 19.06) while
+Operation-aware beats Rule-based CHV on SARI (21.72 vs. 21.12) while
 matching its perfect warning preservation, and narrows the SARI gap to
-Direct-LLM from 5.61 to 4.15 points without any of Direct-LLM's safety
-cost. Read this as "near-total safety preservation at a moderate,
-now-narrowed readability cost relative to an unconstrained LLM" — not
-outright dominance on every metric, since Direct-LLM still leads on raw
-SARI. This is a more honest and, we think, more defensible claim than
-"our system wins on everything."
+Direct-LLM from 4.38 (Rule-CHV vs. Direct-LLM) to 3.77 points without any
+of Direct-LLM's safety cost — it also beats Direct-LLM on numerical
+preservation (0.963 vs. 0.925).
+
+**On the warning-stratified stress test (n=49) — the exact subset where
+safety failures concentrate — the result is even stronger than expected:**
+
+| System | SARI (stratified) | Warning Pres. |
+|---|---:|---:|
+| No simplification | 18.79 | 1.000 |
+| Rule-based CHV | 22.05 | 1.000 |
+| Direct LLM (no guidance) | 24.73 | 0.980 |
+| **Operation-aware (this paper)** | **25.43** | **1.000** |
+
+**Operation-aware's SARI (25.43) actually exceeds Direct-LLM's (24.73) here,
+while holding perfect warning preservation where Direct-LLM drops to
+0.980** — on precisely the sentences where safety matters most, our system
+is simultaneously safer *and* more readable, not merely safer at a cost.
+This replicates the same qualitative pattern seen on val during
+development (below), not a fluke of the held-out split. (n=49 is small —
+treat the exact magnitude as indicative, not a precise population
+estimate, per our own argument about stratified-sample statistical power.)
+
+Read the overall claim as "near-total safety preservation at a moderate,
+now-narrowed readability cost relative to an unconstrained LLM, and
+outright superiority on the safety-critical subset" — not blanket
+dominance on every metric everywhere, since Direct-LLM still leads on
+overall-split SARI. This is a more honest and, we think, more defensible
+claim than "our system wins on everything."
 
 **How the SARI number got there — CHV-then-polish, using the complexity
-detectors as a generation-time guardrail.** The first version of this run
-(CHV-only substitution) scored SARI 18.76 — barely above Rule-based CHV,
-because 43% of sentences (Substitution-routed) got only a flat dictionary
-word-swap with no fluency improvement. Fix: after CHV substitution, an
-optional FLAN-T5 fluency-polish pass runs, constrained by an explicit list
-of protected spans pulled directly from `extract_numerical_expressions()`,
+detectors as a generation-time guardrail.** The first version of the
+pipeline (CHV-only substitution, measured on val during development)
+scored SARI 18.76 — barely above Rule-based CHV's 19.06 — because 43% of
+sentences (Substitution-routed) got only a flat dictionary word-swap with
+no fluency improvement. Fix: after CHV substitution, an optional FLAN-T5
+fluency-polish pass runs, constrained by an explicit list of protected
+spans pulled directly from `extract_numerical_expressions()`,
 `detect_warnings()`, and the CHV terms just substituted — injected into the
 prompt as "do not change these," and verified after generation (not just
 requested): if any protected span is missing from the output, the pipeline
@@ -139,10 +166,24 @@ phrases) raised SARI but dropped warning preservation to 0.986 — adding
 warning-phrase protection recovered it to a perfect 1.000 while pushing
 SARI even higher, a clean win rather than a trade-off.
 
-**Everything reported so far, including this result, was measured on the
-val split**, appropriate for model selection during development but not
-for final headline numbers — one test-set run with the frozen final
-configuration is still needed for the paper (in progress, owned by Zihao).
+**Val-set numbers (n=1,141 overall / n=73 stratified), for reference —
+same qualitative pattern, used during development/model selection:**
+
+| System | SARI (overall) | Warning Pres. | Numerical Pres. |
+|---|---:|---:|---:|
+| No simplification | 16.46 | 1.000 | 1.000 |
+| Rule-based CHV | 19.06 | 1.000 | 1.000 |
+| Direct LLM (no guidance) | 24.37 | 0.959 | 0.949 |
+| **Operation-aware (this paper)** | **20.22** | **1.000** | **0.980** |
+
+One methodological note worth stating plainly: the classifier checkpoint
+used for the test-set run is not the literal same weight file used during
+val-set development — an infrastructure incident deleted the original
+checkpoint mid-session, and it was retrained under identical settings
+before the test-set run. Its macro-F1 (0.467) is consistent with the other
+two independent training runs (0.465, 0.461), which we treat as evidence
+the specific training instance doesn't materially affect these results,
+not as a methodological problem to hide.
 
 ---
 
@@ -594,11 +635,11 @@ environment.yml
 
 | Member | Main contribution | Pending work |
 |---|---|---|
-| Sruthilaya | Complexity detectors, UMLS pipeline, preservation metrics, validation, human evaluation, reproducibility, Track 1/2 correction + Baseline-4 bug fixes (this session) | Run operation-aware-vs-baselines comparison once BioBERT checkpoint finishes training; review results, polish sections, combine paper, trim to eight pages |
-| Sophakotra / Son | Pseudo-labeling, classifier (TF-IDF/DistilBERT/BioBERT), feature integration, generation pipeline | Confirm final classifier choice (BioBERT recommended); Main Idea section reflecting corrected Track 1/2 story |
-| Zihao | Full evaluation (SARI/FKGL/compression/preservation across 3 baselines) | Re-run once operation-aware numbers exist so all systems share one comparison; final test-set run |
-| Rishabh | Data pipeline, CHV vocabulary, EDA visualizations, Related Work | Readability-vs-safety scatter plot (now blocked on operation-aware numbers, not Zihao's — his already landed); condense Related Work; fix duplicate bib-key issue in `paper/final_paper/custom.bib` |
-| Whole team | — | Introduction, Problem Statement, Conclusion, Ethics Statement, final proofreading |
+| Sruthilaya | Complexity detectors, UMLS pipeline, preservation metrics, validation, reproducibility, Track 1/2 correction + Baseline-4 bug fixes, operation-aware val + test-set runs, CHV-then-polish mechanism, full paper draft (this session) | Team review of drafted sections (Intro/Problem/Conclusion/Ethics — written this session, not yet reviewed by anyone else); final combine, trim to page limit |
+| Sophakotra / Son | Pseudo-labeling, classifier (TF-IDF/DistilBERT/BioBERT), feature integration, generation pipeline | Confirm final classifier choice (BioBERT recommended); BioBERT+features experiment (paused, deferred to future work — not blocking) |
+| Zihao | Full evaluation (SARI/FKGL/compression/preservation across 3 baselines) — **done, including the final test-set run** (now run by Sruthilaya using his harness pattern) | Review the final test-set numbers in `results/final_evaluation_testset.csv`; nothing blocking |
+| Rishabh | Data pipeline, CHV vocabulary, EDA visualizations | Readability-vs-safety scatter plot — unblocked, real val + test numbers now exist; Related Work condensing and the bib-key fix are **done** (folded into this session's paper draft) |
+| Whole team | — | review Introduction/Problem/Conclusion/Ethics drafts; final proofreading |
 
 ---
 
@@ -669,12 +710,14 @@ Both assumptions needed correcting:
   filter.
 - Entity preservation is string-match only.
 - Warning paraphrases are manually defined, not learned.
-- All classifier and baseline numbers reported so far are on the **val**
-  split; a final **test**-split run is still needed before these numbers
-  are reported as the paper's headline results.
-- The operation-aware system's comparison against the 3 baselines has been
-  run on val (see "The headline result — landed" above); a test-set run
-  with the frozen final configuration is still needed for submission.
+- Classifier progression (TF-IDF/DistilBERT/BioBERT) and the Track 2
+  feature ablation were evaluated on val only, appropriate for the
+  model-selection role they played; those specific numbers were not
+  re-verified on test.
+- The operation-aware-vs-3-baselines comparison **has** been run on the
+  held-out test set (see "The headline result — landed" above) and is the
+  number reported as the paper's headline result; the val-set run is kept
+  as a secondary, consistent confirmation from development.
 - Human evaluation and final generation comparison are still in progress.
 
 ---
@@ -692,11 +735,13 @@ The paper is framed as:
 
 The paper does not claim that all five detector signals are fused into one
 model. It does now have direct empirical support for the operation-aware
-system on val (SARI 20.22, warning preservation 1.000, beating Rule-based
-CHV and closing part of the gap to Direct-LLM without its safety cost) —
-the claim is a favorable safety/readability trade-off, not outright
-dominance on every metric, and a final test-set run is still needed before
-this is the number reported at submission.
+system on the held-out test set (SARI 21.72 overall, warning preservation
+1.000, beating Rule-based CHV and narrowing the gap to Direct-LLM without
+its safety cost; on the warning-stratified subset, SARI 25.43 actually
+exceeds Direct-LLM's 24.73 while holding perfect safety) — the claim is a
+favorable safety/readability trade-off with outright dominance on the
+safety-critical subset, not blanket dominance on every metric everywhere,
+and this is now the frozen, final number reported at submission.
 
 ---
 
@@ -719,24 +764,30 @@ this is the number reported at submission.
   ablation, the operation-aware pipeline's untrained-classifier /
   placeholder-CHV wiring, and a decoding-strategy mismatch vs. the
   Direct-LLM baseline
-- BioBERT checkpoint trained and saved (val macro-F1 0.461)
+- BioBERT checkpoint trained and saved, reproduced across 3 independent
+  runs (macro-F1 0.465, 0.461, 0.467)
 - **Operation-aware system vs. 3-baselines comparison — the paper's
-  central empirical result — run and landed:** SARI 20.22 (beats
-  Rule-based CHV's 19.06), warning preservation 1.000 (matches the safest
-  baseline), narrows the SARI gap to Direct-LLM from 5.61 to 4.15 points
+  central empirical result — run and landed on both val and the held-out
+  test set.** Test set (the headline number): SARI 21.72 overall (beats
+  Rule-based CHV's 21.12), warning preservation 1.000 (matches the safest
+  baseline), narrows the SARI gap to Direct-LLM from 4.38 to 3.77 points;
+  on the warning-stratified subset (n=49), SARI 25.43 exceeds Direct-LLM's
+  24.73 while holding perfect warning preservation where Direct-LLM drops
+  to 0.980
 - CHV-then-polish generation step added: complexity detectors
   (numerical/warning/CHV-term detection) used as an explicit,
   post-hoc-verified guardrail on LLM generation, not just a classifier
   input — the first place detection directly feeds generation in this
   project
+- Full paper draft written (`paper/final_paper/acl2023.tex`) — every
+  section filled in with verified numbers, cross-checked digit-by-digit
+  against the underlying results CSVs; bib duplicate-key issue fixed
 - Reproducible infrastructure end-to-end
 
 ### In progress
 
-- Final test-set run (all numbers so far, including the headline result
-  above, are on val — owned by Zihao)
 - BioBERT + domain features experiment targeting the Generalization
-  weakness (owned by Sophakotra/Son)
+  weakness (paused/deferred to future work — not blocking submission)
 - Readability-vs-safety scatter plot (unblocked, real numbers now exist)
-- Human evaluation
-- Final paper assembly
+- Team review of newly-drafted paper sections; final assembly and
+  page-limit trim

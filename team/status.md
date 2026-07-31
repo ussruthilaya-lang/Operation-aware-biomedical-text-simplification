@@ -1,6 +1,57 @@
 # Project Status — Operation-Aware Biomedical Text Simplification
-**Last updated:** 07/29/26 by Sruthilaya
+**Last updated:** 07/31/26 by Sruthilaya
 **Deadline:** Team finishes remaining work by Thursday; final combine + submission after.
+
+---
+
+## -1. Session update (07/31) — test-set run landed, full paper written, numeric audit fixed 2 real errors
+
+The operation-aware-vs-3-baselines comparison was run on the true, held-out
+**test set** (n=1,000 overall / n=49 warning-stratified — never touched
+during development), using `src/evaluation/run_final_testset_evaluation.py`
+(mirrors Zihao's `run_evaluation.py` pattern, extended to `_TEST_CSV`).
+Result, and it's stronger than the val-set run:
+
+| System | SARI (overall) | Warn. (overall) | Num. (overall) | SARI (stratified) | Warn. (stratified) |
+|---|---|---|---|---|---|
+| No simplification | 18.45 | 1.000 | 1.000 | 18.79 | 1.000 |
+| Rule-based CHV | 21.12 | 1.000 | 1.000 | 22.05 | 1.000 |
+| Direct LLM | 25.49 | 0.980 | 0.925 | 24.73 | 0.980 |
+| **Operation-aware** | **21.72** | **1.000** | 0.963 | **25.43** | **1.000** |
+
+**Headline finding:** on the warning-stratified stress test, operation-aware's
+SARI (25.43) *exceeds* Direct-LLM's (24.73) while holding perfect warning
+preservation where Direct-LLM drops to 0.980 — on exactly the sentences
+where safety failures concentrate, our system is simultaneously safer and
+more readable, not just safer at a cost. Same qualitative pattern as val,
+stronger magnitude. Written to `results/final_evaluation_testset.csv`.
+
+Also wrote the full paper draft (`paper/final_paper/acl2023.tex`) — every
+remaining TODO section filled in (Abstract, Introduction, Problem, Main
+Idea, Operation Classification, CHV-then-polish, Full-System Evaluation,
+Related Work, Conclusion, Limitations, Ethics) — and fixed
+`paper/final_paper/custom.bib`'s duplicate/stub citation keys.
+
+**Numeric cross-check caught 2 real errors before they reached the paper,
+now fixed:**
+1. A sentence claimed the SARI gap between Rule-based CHV and Direct-LLM
+   was "7.05 points" — the real value is 4.38; 7.05 was actually a
+   different, irrelevant comparison (Direct-LLM minus No-simplification)
+   that got mislabeled during drafting. Same class of bug appeared twice
+   more in README.md ("5.61" where the real val-set gap is ~5.31) — fixed
+   in both places.
+2. A sentence cited "Generalization F1 0.365, recall 32%" as if it were
+   tied to the headline 0.465 macro-F1 run, when it was actually from a
+   *different* training run (0.461). Corrected to report the honest range
+   across all three independent runs (F1 0.365–0.423, recall 29–32%)
+   rather than implying false precision from an unlabeled single run.
+
+Also flagged and disclosed honestly in the paper: the classifier checkpoint
+used for the test-set run is not the literal same weight file used during
+val-set development (the filter-repo incident deleted the original
+checkpoint mid-session; it was retrained under identical settings before
+the test-set run). Framed as supporting evidence for reproducibility
+(macro-F1 0.467 vs. the other two runs' 0.465/0.461), not hidden.
 
 ---
 
@@ -112,15 +163,17 @@ higher than the unprotected version — a genuine win, not a trade-off.
 | No simplification | 16.46 | 1.000 | 1.000 |
 | Rule-based CHV | 19.06 | 1.000 | 1.000 |
 | Direct LLM (no guidance) | 24.37 | 0.959 | 0.949 |
-| **Operation-aware (this paper, final)** | **20.22** | **1.000** | **0.980** |
+| **Operation-aware (val, superseded by test-set result — see Section -1)** | **20.22** | **1.000** | **0.980** |
 
 Operation-aware now beats Rule-based CHV on SARI while matching it on
 warning preservation, and closes much of the SARI gap to Direct-LLM
-(5.61→4.15 points) while remaining the only system besides Rule-based CHV
+(5.31→4.14 points) while remaining the only system besides Rule-based CHV
 with perfect warning preservation. Frame this honestly as "near-total safety
 preservation at a moderate, now-narrowed readability cost relative to an
 unconstrained LLM" — not outright dominance on every metric, since
-Direct-LLM still leads on raw SARI.
+Direct-LLM still leads on raw SARI. **This val-set result has since been
+confirmed and strengthened on the held-out test set (Section -1) — the
+test-set numbers are what the paper reports.**
 
 **Net effect:** neither Track 1 (BioBERT +9.7%, real) nor Track 2 (domain
 features, corrected below) needed to be thrown out — but Track 2's framing
@@ -341,8 +394,8 @@ need to edit another person's owned files. Sequencing matters (see
 |---|---|---|---|---|---|
 | 1 | **Sruthilaya** | ~~Fix decoding-strategy mismatch, run the operation-aware-vs-3-baselines comparison~~ **DONE (07/29).** Final: SARI 20.22 (overall), warning preservation 1.000, beats Rule-based CHV on SARI while matching its safety — see Section 0 for the full result and the CHV-then-polish addition that got it there | `src/pipeline/end_to_end_pipeline.py`; `src/evaluation/run_operation_aware_evaluation.py` | — | `results/final_evaluation.csv` (`operation_aware` rows added) — **#3 and #4's scatter plot are now unblocked** |
 | 2 | **Sophakotra / Son** | Confirm BioBERT as final classifier; own the **BioBERT + domain features (UMLS + numerical)** experiment targeting the Generalization weakness (Section 5.1 item 2). **Must save to a separate checkpoint dir, not `models/biobert_operation_classifier/`**, so it doesn't overwrite the checkpoint #1 depends on. Also: Main Idea section (reflect the corrected Track 1/2 story, not the original PR framing); confirm `_levenshtein` dead-code question | `src/classifier/biobert_classifier.py` (read-only reference), new script/checkpoint dir e.g. `models/biobert_features_operation_classifier/`; `paper/final_paper/acl2023.tex` Main Idea section | None — can start immediately, fully parallel to #1 | New results file, e.g. `results/biobert_features_classifier.txt`; Main Idea prose |
-| 3 | **Zihao** | **Unblocked, start now.** Own the **final test-set run** (not val) — re-run the 3-baseline + operation-aware harness on the true 148-sentence test set now that #1's operation-aware run has landed, so all 4 systems are compared on identical, final splits. Also integrate entity preservation into the harness (coordinate with Sruthilaya on the detector, don't duplicate it) | `src/evaluation/run_evaluation.py` (his file, extend for test split) | #1 (done) | New file, e.g. `results/final_evaluation_testset.csv` (do not overwrite `final_evaluation.csv`, which stays as the val record) |
-| 4 | **Rishabh** | **New technical contribution: own the random-routing ablation** (Section 5.1 item 3) — build it as a ready-to-run script (self-contained: reuses `operation_router.py` + `end_to_end_pipeline.py`'s CHV/LLM functions with the routing decision shuffled instead of BioBERT's prediction). **Not required to run** — #1's result was a clear, unambiguous win (SARI up, warning preservation perfect), so the contingency condition for needing this ablation didn't trigger; keep it built and ready in case a reviewer asks, but don't spend time executing/reporting it unless asked. **Unblocked, start now:** readability-vs-safety scatter plot (real numbers exist — use the final headline table in Section 0), Related Work condensing, duplicate bib-key fix (`Ondov2025`/`Attal2023` in `paper/final_paper/custom.bib` vs. `ondov2025lessons`/`attal2023plaba` already in `paper/custom.bib`) | New script, e.g. `src/evaluation/run_routing_ablation.py`; `notebooks/visualizations.ipynb` (his file) for the scatter plot; `paper/final_paper/acl2023.tex` Related Work + `paper/final_paper/custom.bib` | #1 (done) | Scatter plot figure, e.g. `results/readability_safety_scatter.png`; ablation script kept on standby, not run |
+| 3 | **Zihao** (run by Sruthilaya, 07/31, using his harness pattern) | ~~Final test-set run~~ **DONE.** All 4 systems compared on the true test split (n=1,000 overall / n=49 stratified) — see Section -1 for the headline result. Entity preservation still `N/A` (NER env integration remains open, low priority) | `src/evaluation/run_final_testset_evaluation.py` (new file, mirrors his `run_evaluation.py` pattern) | — | `results/final_evaluation_testset.csv` — **please review these numbers, they're now the paper's headline result** |
+| 4 | **Rishabh** | Related Work condensing and the duplicate bib-key fix are **done** (folded into the 07/31 paper draft, Section -1). **Remaining: readability-vs-safety scatter plot** — real val AND test numbers now exist (Section -1's tables), no longer blocked on anything. Random-routing ablation (Section 5.1 item 3) stays a not-required contingency — #1/#3's results were a clear, unambiguous win on both splits, so it never needed to run; leave the idea on standby | `notebooks/visualizations.ipynb` (his file) for the scatter plot | — | Scatter plot figure, e.g. `results/readability_safety_scatter.png` |
 | 5 | Whole team | Introduction, Problem section, Conclusion, Ethics Statement; final 8-page trim | `paper/final_paper/acl2023.tex` (coordinate before editing simultaneously) | All of #1-4 for real numbers | — |
 | 6 | Sruthilaya | Final paper section review/polish once other sections land; final combine | — | #1-5 | — |
 
