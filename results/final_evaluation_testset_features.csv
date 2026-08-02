@@ -1,0 +1,9 @@
+split,baseline,n_sentences,SARI,FKGL,compression_ratio,warning_preservation,entity_preservation,numerical_preservation
+overall,baseline1_no_simplification,1000,18.446,14.863,1.0,1.0,,1.0
+overall,baseline2_rule_based_chv,1000,21.115,14.464,1.01,1.0,,1.0
+overall,baseline3_direct_llm,1000,25.493,14.342,0.942,0.98,,0.925
+warning_stratified,baseline1_no_simplification,49,18.785,16.817,1.0,1.0,,1.0
+warning_stratified,baseline2_rule_based_chv,49,22.053,15.412,1.012,1.0,,1.0
+warning_stratified,baseline3_direct_llm,49,24.734,16.37,0.951,0.98,,0.818
+overall,baseline4_operation_aware_features,1000,21.075,14.715,0.993,1.0,N/A,0.975
+warning_stratified,baseline4_operation_aware_features,49,24.219,16.203,0.977,1.0,N/A,0.909

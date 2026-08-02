@@ -635,11 +635,11 @@ environment.yml
 
 | Member | Main contribution | Pending work |
 |---|---|---|
-| Sruthilaya | Complexity detectors, UMLS pipeline, preservation metrics, validation, reproducibility, Track 1/2 correction + Baseline-4 bug fixes, operation-aware val + test-set runs, CHV-then-polish mechanism, full paper draft (this session) | Team review of drafted sections (Intro/Problem/Conclusion/Ethics — written this session, not yet reviewed by anyone else); final combine, trim to page limit |
+| Sruthilaya | Complexity detectors, UMLS pipeline, preservation metrics, validation, reproducibility, Track 1/2 correction + Baseline-4 bug fixes, operation-aware val + test-set runs, CHV-then-polish mechanism, full paper draft + full claim-by-claim audit/compression pass (this session) | Team review of the (now audited and compressed) paper; final proofread; fill in real author emails |
 | Sophakotra / Son | Pseudo-labeling, classifier (TF-IDF/DistilBERT/BioBERT), feature integration, generation pipeline | Confirm final classifier choice (BioBERT recommended); BioBERT+features experiment (paused, deferred to future work — not blocking) |
 | Zihao | Full evaluation (SARI/FKGL/compression/preservation across 3 baselines) — **done, including the final test-set run** (now run by Sruthilaya using his harness pattern) | Review the final test-set numbers in `results/final_evaluation_testset.csv`; nothing blocking |
-| Rishabh | Data pipeline, CHV vocabulary, EDA visualizations | Readability-vs-safety scatter plot — unblocked, real val + test numbers now exist; Related Work condensing and the bib-key fix are **done** (folded into this session's paper draft) |
-| Whole team | — | review Introduction/Problem/Conclusion/Ethics drafts; final proofreading |
+| Rishabh | Data pipeline, CHV vocabulary, EDA visualizations, readability-vs-safety scatter plot notebook | **All items done** — his `notebooks/scatterplots.ipynb` was run and both figures are now in the paper (Section 4.5); Related Work condensing and the bib-key fix also done |
+| Whole team | — | Final proofread of the compressed paper; human evaluation still not run; final page-limit check |
 
 ---
 
@@ -782,12 +782,29 @@ and this is now the frozen, final number reported at submission.
 - Full paper draft written (`paper/final_paper/acl2023.tex`) — every
   section filled in with verified numbers, cross-checked digit-by-digit
   against the underlying results CSVs; bib duplicate-key issue fixed
+- **Full claim-by-claim paper audit**, checked against code and data rather
+  than assumed: caught and fixed a genuine methodological issue (phi
+  correlation computed at abstract level is mathematically degenerate for
+  UMLS, which fires on 100% of abstracts — the paper's correlation claim is
+  now correctly scoped to the four non-degenerate detectors), a real
+  architecture-vs-claim gap (protected-span verification only covers the
+  Substitution path, not Explanation/Generalization — now stated
+  explicitly), an unearned efficiency claim (removed, since the actual
+  Substitution path still calls the LLM for polish almost every time), plus
+  a dozen smaller wording/number precision fixes
+- **Major compression pass**: merged the standalone Problem section into
+  the Introduction, cut duplicated discussion from Main Idea, and condensed
+  Conclusion + Limitations + Ethics from several pages down to ~370 words
+  — no content lost, just de-duplicated
+- Readability-vs-safety scatter plot — **done**, both figures generated
+  from `notebooks/scatterplots.ipynb` and inserted into the paper
+- Author list added (Sruthilaya Umasankari Soma Shanmuga Sundaram,
+  Sophakotra Son, Zihao Wang, Rishabh Gowda)
 - Reproducible infrastructure end-to-end
 
 ### In progress
 
 - BioBERT + domain features experiment targeting the Generalization
   weakness (paused/deferred to future work — not blocking submission)
-- Readability-vs-safety scatter plot (unblocked, real numbers now exist)
-- Team review of newly-drafted paper sections; final assembly and
-  page-limit trim
+- Team review of the audited, compressed paper; final assembly and
+  page-limit trim; real author emails still needed

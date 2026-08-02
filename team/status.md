@@ -1,6 +1,62 @@
 # Project Status — Operation-Aware Biomedical Text Simplification
-**Last updated:** 07/31/26 by Sruthilaya
+**Last updated:** 08/01/26 by Sruthilaya
 **Deadline:** Team finishes remaining work by Thursday; final combine + submission after.
+
+---
+
+## -2. Session update (08/01) — full claim-by-claim paper audit, scatter plot landed, author list added
+
+A full pass through `paper/final_paper/acl2023.tex`, claim by claim, catching
+and fixing overclaims that were each individually reasonable-sounding but
+didn't hold up against the actual code/data. The most serious:
+
+- **Phi-correlation degeneracy (the one methodologically real issue).**
+  Checked `src/evaluation/detector_pair_correlation.py` and
+  `results/detector_pair_correlation.csv` directly: UMLS jargon fires on
+  100% of abstracts (zero variance at abstract level), so its phi
+  coefficient with every other detector is mathematically undefined — the
+  code's own `phi_coefficient()` returns a hardcoded `0.0` fallback in
+  exactly this case, not a real measurement. The paper's "near-zero
+  correlation among all five detectors" claim was overstating what the
+  4 UMLS-paired `0.0` values actually show. Fixed: correlation claim now
+  scoped to the four non-degenerate detectors (NER, warning, syntactic,
+  numerical; strongest genuine value is NER-warning at $\phi=0.078$), with
+  UMLS's complementarity argued separately via hit-rate co-occurrence, not
+  phi.
+- **Guardrail-scope gap** (found via direct code check of
+  `llm_constrained_simplify()`): protected-span verification only applies to
+  Substitution-routed CHV-then-polish, not Explanation/Generalization
+  generation — paper now says this explicitly instead of implying the whole
+  architecture is guarded "by construction."
+- **Removed an unearned efficiency claim**: an earlier addition argued
+  operation routing might save LLM inference cost, but the actual
+  Substitution path still calls FLAN-T5 for the polish step whenever any
+  protected span exists (almost always) — deleted, not just softened.
+- A dozen smaller wording fixes: "complete jargon coverage" → precise
+  abstract-level hit-rate language; "zero hallucination risk" → "avoids
+  generative hallucination at this step"; ambiguous "2.1–2.5%" → "0.021–0.025
+  absolute"; "classifier cannot exceed label reliability" → "label noise
+  likely limits performance"; "guaranteed-safe" → "deterministic"; a
+  self-referential "Sections 3.3 and 3.3" (same section, two labels)
+  collapsed to one; the sentence-vs-span-level scope now stated explicitly
+  throughout, not just once.
+- **Major compression pass** (separate from the correctness fixes): merged
+  the standalone "Problem" section into the Introduction, cut the Main
+  Idea section's "two design decisions" discussion (already covered later
+  in the classifier/CHV-polish sections), and compressed Conclusion +
+  Limitations + Ethics from several dense pages down to ~370 words total,
+  each removing duplication rather than content — every fact stayed, most
+  restated once instead of three times.
+
+**Rishabh's scatter plot is done.** Ran his `notebooks/scatterplots.ipynb`
+against `results/final_evaluation_testset.csv`, generated both the overall
+and warning-stratified readability-vs-safety plots
+(`results/readability_safety_scatter{,_stratified}.png`), and inserted both
+as Figures 1-2 in Section 4.5 of the paper.
+
+**Author list added**: Sruthilaya Umasankari Soma Shanmuga Sundaram,
+Sophakotra Son, Zihao Wang, Rishabh Gowda (Northeastern University). Email
+placeholder still needs real addresses before submission.
 
 ---
 
@@ -395,7 +451,7 @@ need to edit another person's owned files. Sequencing matters (see
 | 1 | **Sruthilaya** | ~~Fix decoding-strategy mismatch, run the operation-aware-vs-3-baselines comparison~~ **DONE (07/29).** Final: SARI 20.22 (overall), warning preservation 1.000, beats Rule-based CHV on SARI while matching its safety — see Section 0 for the full result and the CHV-then-polish addition that got it there | `src/pipeline/end_to_end_pipeline.py`; `src/evaluation/run_operation_aware_evaluation.py` | — | `results/final_evaluation.csv` (`operation_aware` rows added) — **#3 and #4's scatter plot are now unblocked** |
 | 2 | **Sophakotra / Son** | Confirm BioBERT as final classifier; own the **BioBERT + domain features (UMLS + numerical)** experiment targeting the Generalization weakness (Section 5.1 item 2). **Must save to a separate checkpoint dir, not `models/biobert_operation_classifier/`**, so it doesn't overwrite the checkpoint #1 depends on. Also: Main Idea section (reflect the corrected Track 1/2 story, not the original PR framing); confirm `_levenshtein` dead-code question | `src/classifier/biobert_classifier.py` (read-only reference), new script/checkpoint dir e.g. `models/biobert_features_operation_classifier/`; `paper/final_paper/acl2023.tex` Main Idea section | None — can start immediately, fully parallel to #1 | New results file, e.g. `results/biobert_features_classifier.txt`; Main Idea prose |
 | 3 | **Zihao** (run by Sruthilaya, 07/31, using his harness pattern) | ~~Final test-set run~~ **DONE.** All 4 systems compared on the true test split (n=1,000 overall / n=49 stratified) — see Section -1 for the headline result. Entity preservation still `N/A` (NER env integration remains open, low priority) | `src/evaluation/run_final_testset_evaluation.py` (new file, mirrors his `run_evaluation.py` pattern) | — | `results/final_evaluation_testset.csv` — **please review these numbers, they're now the paper's headline result** |
-| 4 | **Rishabh** | Related Work condensing and the duplicate bib-key fix are **done** (folded into the 07/31 paper draft, Section -1). **Remaining: readability-vs-safety scatter plot** — real val AND test numbers now exist (Section -1's tables), no longer blocked on anything. Random-routing ablation (Section 5.1 item 3) stays a not-required contingency — #1/#3's results were a clear, unambiguous win on both splits, so it never needed to run; leave the idea on standby | `notebooks/visualizations.ipynb` (his file) for the scatter plot | — | Scatter plot figure, e.g. `results/readability_safety_scatter.png` |
+| 4 | **Rishabh** | ~~Readability-vs-safety scatter plot~~ **DONE (08/01, run by Sruthilaya using his notebook).** Related Work condensing and the duplicate bib-key fix also done. All of Rishabh's assigned items now complete. Random-routing ablation (Section 5.1 item 3) stays a not-required contingency — #1/#3's results were a clear, unambiguous win on both splits, so it never needed to run; leave the idea on standby | `notebooks/scatterplots.ipynb` (executed) | — | `results/readability_safety_scatter.png` + `_stratified.png`, inserted as Figures 1-2 in the paper |
 | 5 | Whole team | Introduction, Problem section, Conclusion, Ethics Statement; final 8-page trim | `paper/final_paper/acl2023.tex` (coordinate before editing simultaneously) | All of #1-4 for real numbers | — |
 | 6 | Sruthilaya | Final paper section review/polish once other sections land; final combine | — | #1-5 | — |
 

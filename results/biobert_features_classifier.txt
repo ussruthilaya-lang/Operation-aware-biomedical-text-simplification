@@ -1,0 +1,40 @@
+BioBERT + Domain Features — Operation Classifier
+Reference: BioBERT alone macro-F1 0.461-0.465, Generalization F1 0.365
+Reference: TF-IDF baseline macro-F1 0.424
+
+biobert_umls_only         macro-F1 0.483  (Sub 0.522 / Exp 0.470 / Gen 0.458)
+
+                precision    recall  f1-score   support
+
+  Substitution      0.496     0.550     0.522       611
+   Explanation      0.498     0.446     0.470       464
+Generalization      0.470     0.447     0.458       356
+
+      accuracy                          0.491      1431
+     macro avg      0.488     0.481     0.483      1431
+  weighted avg      0.490     0.491     0.489      1431
+
+Confusion matrix (biobert_umls_only, rows=true, cols=pred):
+labels: ['Substitution', 'Explanation', 'Generalization']
+[[336 151 124]
+ [202 207  55]
+ [139  58 159]]
+
+biobert_umls_numerical    macro-F1 0.471  (Sub 0.492 / Exp 0.485 / Gen 0.437)
+
+                precision    recall  f1-score   support
+
+  Substitution      0.515     0.471     0.492       611
+   Explanation      0.461     0.511     0.485       464
+Generalization      0.436     0.438     0.437       356
+
+      accuracy                          0.476      1431
+     macro avg      0.471     0.473     0.471      1431
+  weighted avg      0.478     0.476     0.476      1431
+
+Confusion matrix (biobert_umls_numerical, rows=true, cols=pred):
+labels: ['Substitution', 'Explanation', 'Generalization']
+[[288 192 131]
+ [156 237  71]
+ [115  85 156]]
+
