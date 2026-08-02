@@ -606,6 +606,31 @@ appeared during validation. Together with BioBERT's stable performance
 across three runs (Section~\ref{sec:classifier-results}), this suggests the
 result is not driven by one favorable checkpoint or split.
 
+Figure~\ref{fig:scatter-overall} and Figure~\ref{fig:scatter-stratified}
+visualize both tables directly on the readability-safety plane: the overall
+split shows a genuine trade-off frontier between our system and Direct LLM,
+while the stratified split shows our system strictly dominating Direct LLM
+on both axes simultaneously.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{../../results/readability_safety_scatter.png}
+\caption{Readability (SARI) vs.\ safety (warning preservation) on the
+overall test split ($n=1{,}000$). Our system and Rule-based CHV both sit in
+the perfectly-safe band; our system reads better. Direct LLM reads better
+still but exits the safe band.}
+\label{fig:scatter-overall}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{../../results/readability_safety_scatter_stratified.png}
+\caption{Same axes, restricted to the warning-stratified stress test
+($n=49$). Here our system dominates Direct LLM outright -- higher SARI and
+higher warning preservation simultaneously.}
+\label{fig:scatter-stratified}
+\end{figure}
+
 \section{Related Work}
 
 \paragraph{Datasets and prior PLABA systems.}
